@@ -5,8 +5,8 @@ import { Platform } from 'react-native';
 // Dynamically target local host machine depending on platforms
 // Android emulator uses 10.0.2.2, iOS and Web use localhost
 const getBaseUrl = () => {
-  // Use local network IP so physical devices on same Wi-Fi can connect
-  return 'http://192.168.0.141:5000/api';
+  // Use Vercel backend URL
+  return 'https://split-bill-nine-mu.vercel.app/api';
 };
 
 const api = axios.create({
