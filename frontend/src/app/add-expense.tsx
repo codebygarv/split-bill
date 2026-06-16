@@ -16,6 +16,8 @@ import { useGroup } from '../context/GroupContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Theme } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const CATEGORIES = [
   { name: 'Vegetables', emoji: '🥬' },
@@ -58,6 +60,11 @@ export default function AddExpenseScreen() {
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Focus States
+  const [amountFocused, setAmountFocused] = useState(false);
+  const [notesFocused, setNotesFocused] = useState(false);
+  const [focusedCustomInput, setFocusedCustomInput] = useState<string | null>(null);
 
   useEffect(() => {
     fetchGroupMembers();
@@ -166,6 +173,13 @@ export default function AddExpenseScreen() {
 
   const numericAmount = parseFloat(amount) || 0;
 
+  // Live custom splits validation
+  const customSplitsSum = Object.keys(customSplits).reduce(
+    (acc, id) => acc + (parseFloat(customSplits[id]) || 0),
+    0
+  );
+  const remainingAmount = numericAmount - customSplitsSum;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -174,86 +188,136 @@ export default function AddExpenseScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>Cancel</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackButton} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={Theme.colors.primaryDark} />
+            <Text style={styles.headerBackText}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Add Expense</Text>
-          <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting} style={styles.saveButton}>
-            <Text style={[styles.saveText, isSubmitting && styles.disabledText]}>Save</Text>
+          <Text style={styles.headerTitle}>Add Expense</Text>
+          <TouchableOpacity 
+            onPress={handleSubmit} 
+            disabled={isSubmitting} 
+            style={styles.headerSaveButtonWrapper}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#2BA8A2', '#007A75']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.headerSaveButton, isSubmitting && styles.saveButtonDisabled]}
+            >
+              <Text style={styles.headerSaveText}>
+                {isSubmitting ? 'Saving...' : 'Save'}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {errorMsg && (
             <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={{ marginRight: 6 }} />
               <Text style={styles.errorText}>{errorMsg}</Text>
             </View>
           )}
 
           {/* Amount input */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>Amount</Text>
+          <LinearGradient
+            colors={amountFocused ? ['#FFFFFF', '#E6F4F2'] : ['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.amountCard, amountFocused && styles.amountCardFocused]}
+          >
+            <Text style={styles.cardLabel}>AMOUNT</Text>
             <View style={styles.amountInputRow}>
               <Text style={styles.currencySymbol}>₹</Text>
               <TextInput
                 style={styles.amountInput}
                 placeholder="0"
-                placeholderTextColor={Theme.colors.textSecondary}
+                placeholderTextColor="rgba(13, 44, 42, 0.3)"
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
+                onFocus={() => setAmountFocused(true)}
+                onBlur={() => setAmountFocused(false)}
+                selectionColor={Theme.colors.primary}
               />
             </View>
-          </View>
+          </LinearGradient>
 
           {/* Category selection */}
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Category</Text>
+            <Text style={styles.cardLabel}>CATEGORY</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
               {CATEGORIES.map((cat) => {
                 const isSelected = category === cat.name;
                 return (
                   <TouchableOpacity
                     key={cat.name}
-                    style={[
-                      styles.categoryBtn,
-                      isSelected && styles.categoryBtnSelected,
-                    ]}
+                    style={styles.categoryBtnWrapper}
                     onPress={() => setCategory(cat.name)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                    <Text style={[
-                      styles.categoryBtnText,
-                      isSelected && styles.categoryBtnTextSelected,
-                    ]}>
-                      {cat.name}
-                    </Text>
+                    {isSelected ? (
+                      <LinearGradient
+                        colors={['#2BA8A2', '#007A75']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.categoryBtnSelected}
+                      >
+                        <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                        <Text style={styles.categoryBtnTextSelected}>{cat.name}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.categoryBtnUnselected}>
+                        <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                        <Text style={styles.categoryBtnText}>{cat.name}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
           </View>
 
-          {/* Paid By dropdown */}
+          {/* Paid By section */}
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Paid By</Text>
+            <Text style={styles.cardLabel}>PAID BY</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerScroll}>
               {members.map((member) => {
                 const isSelected = paidBy === member._id;
+                const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 return (
                   <TouchableOpacity
                     key={member._id}
-                    style={[
-                      styles.payerBtn,
-                      isSelected && styles.payerBtnSelected,
-                    ]}
+                    style={styles.payerCard}
                     onPress={() => setPaidBy(member._id)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[
-                      styles.payerBtnText,
-                      isSelected && styles.payerBtnTextSelected,
-                    ]}>
-                      {member.name === user?.name ? 'You' : member.name}
+                    {isSelected ? (
+                      <View style={styles.payerAvatarOuterRing}>
+                        <LinearGradient
+                          colors={['#2BA8A2', '#006A66']}
+                          style={styles.payerAvatarSelected}
+                        >
+                          <Text style={styles.payerAvatarTextSelected}>{initials}</Text>
+                        </LinearGradient>
+                        <View style={styles.avatarCheckBadge}>
+                          <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.payerAvatarUnselected}>
+                        <Text style={styles.payerAvatarText}>{initials}</Text>
+                      </View>
+                    )}
+                    <Text 
+                      style={[
+                        styles.payerNameText,
+                        isSelected && styles.payerNameTextSelected,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {member.name === user?.name ? 'You' : member.name.split(' ')[0]}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -261,13 +325,14 @@ export default function AddExpenseScreen() {
             </ScrollView>
           </View>
 
-          {/* Split Type toggle */}
+          {/* Split Options section */}
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Split Options</Text>
+            <Text style={styles.cardLabel}>SPLIT OPTIONS</Text>
             <View style={styles.toggleContainer}>
               <TouchableOpacity
                 style={[styles.toggleBtn, splitType === 'equal' && styles.toggleBtnActive]}
                 onPress={() => setSplitType('equal')}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.toggleText, splitType === 'equal' && styles.toggleTextActive]}>
                   Equally
@@ -276,6 +341,7 @@ export default function AddExpenseScreen() {
               <TouchableOpacity
                 style={[styles.toggleBtn, splitType === 'custom' && styles.toggleBtnActive]}
                 onPress={() => setSplitType('custom')}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.toggleText, splitType === 'custom' && styles.toggleTextActive]}>
                   Custom Amounts
@@ -287,6 +353,7 @@ export default function AddExpenseScreen() {
             <View style={styles.splitList}>
               {members.map((member) => {
                 const isSelected = splitMembers.includes(member._id);
+                const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 
                 if (splitType === 'equal') {
                   const share = isSelected ? (numericAmount / splitMembers.length) : 0;
@@ -295,16 +362,20 @@ export default function AddExpenseScreen() {
                       key={member._id}
                       style={styles.splitRow}
                       onPress={() => handleToggleMember(member._id)}
+                      activeOpacity={0.7}
                     >
                       <View style={styles.checkboxContainer}>
                         <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                          {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                          {isSelected && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
+                        </View>
+                        <View style={styles.memberMiniAvatar}>
+                          <Text style={styles.memberMiniAvatarText}>{initials}</Text>
                         </View>
                         <Text style={styles.splitName}>
                           {member.name === user?.name ? 'You' : member.name}
                         </Text>
                       </View>
-                      <Text style={styles.splitShareText}>
+                      <Text style={[styles.splitShareText, isSelected && styles.splitShareTextActive]}>
                         {share > 0 ? `₹${share.toFixed(2)}` : 'Excluded'}
                       </Text>
                     </TouchableOpacity>
@@ -313,18 +384,29 @@ export default function AddExpenseScreen() {
                   // custom split input
                   return (
                     <View key={member._id} style={styles.splitRowCustom}>
-                      <Text style={styles.splitName}>
-                        {member.name === user?.name ? 'You' : member.name}
-                      </Text>
-                      <View style={styles.customInputWrapper}>
+                      <View style={styles.memberInfoRow}>
+                        <View style={styles.memberMiniAvatar}>
+                          <Text style={styles.memberMiniAvatarText}>{initials}</Text>
+                        </View>
+                        <Text style={styles.splitName}>
+                          {member.name === user?.name ? 'You' : member.name}
+                        </Text>
+                      </View>
+                      <View style={[
+                        styles.customInputWrapper,
+                        focusedCustomInput === member._id && styles.customInputWrapperFocused
+                      ]}>
                         <Text style={styles.currencyPrefix}>₹</Text>
                         <TextInput
                           style={styles.customSplitInput}
                           placeholder="0.00"
-                          placeholderTextColor={Theme.colors.textSecondary}
+                          placeholderTextColor="rgba(13, 44, 42, 0.3)"
                           keyboardType="numeric"
                           value={customSplits[member._id] || ''}
                           onChangeText={(val) => handleCustomSplitChange(member._id, val)}
+                          onFocus={() => setFocusedCustomInput(member._id)}
+                          onBlur={() => setFocusedCustomInput(null)}
+                          selectionColor={Theme.colors.primary}
                         />
                       </View>
                     </View>
@@ -332,18 +414,60 @@ export default function AddExpenseScreen() {
                 }
               })}
             </View>
+
+            {/* Custom split real-time validation status banner */}
+            {splitType === 'custom' && numericAmount > 0 && (
+              <View style={[
+                styles.splitStatusBanner,
+                Math.abs(remainingAmount) < 0.05 ? styles.splitStatusBannerSuccess : 
+                remainingAmount > 0 ? styles.splitStatusBannerWarning : styles.splitStatusBannerError
+              ]}>
+                <Ionicons 
+                  name={Math.abs(remainingAmount) < 0.05 ? "checkmark-circle" : "alert-circle"} 
+                  size={16} 
+                  color={
+                    Math.abs(remainingAmount) < 0.05 ? Theme.colors.success : 
+                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                  } 
+                />
+                <Text style={[
+                  styles.splitStatusText,
+                  {
+                    color: Math.abs(remainingAmount) < 0.05 ? Theme.colors.success : 
+                           remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                  }
+                ]}>
+                  {Math.abs(remainingAmount) < 0.05 ? 'Total amount split perfectly!' :
+                   remainingAmount > 0 ? `Remaining to allocate: ₹${remainingAmount.toFixed(2)}` :
+                   `Over split by: ₹${Math.abs(remainingAmount).toFixed(2)}`}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Notes description */}
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Description / Notes (Optional)</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="e.g. Tomato & Onion, Uber ride, Airbnb rent"
-              placeholderTextColor={Theme.colors.textSecondary}
-              value={notes}
-              onChangeText={setNotes}
-            />
+            <Text style={styles.cardLabel}>DESCRIPTION / NOTES (OPTIONAL)</Text>
+            <View style={[
+              styles.notesInputWrapper,
+              notesFocused && styles.notesInputWrapperFocused
+            ]}>
+              <Ionicons 
+                name="document-text-outline" 
+                size={20} 
+                color={notesFocused ? Theme.colors.primary : Theme.colors.textSecondary} 
+                style={styles.notesIcon} 
+              />
+              <TextInput
+                style={styles.notesInput}
+                placeholder="What was this expense for?"
+                placeholderTextColor={Theme.colors.textSecondary}
+                value={notes}
+                onChangeText={setNotes}
+                onFocus={() => setNotesFocused(true)}
+                onBlur={() => setNotesFocused(false)}
+              />
+            </View>
           </View>
 
         </ScrollView>
@@ -355,46 +479,80 @@ export default function AddExpenseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: '#F3F7F5', // Seamless Mint background
   },
   keyboardView: {
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: '#F3F7F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Theme.spacing.marginMobile,
-    paddingVertical: Theme.spacing.md,
-    backgroundColor: Theme.colors.surface,
-    borderBottomWidth: 1,
-    borderColor: Theme.colors.border,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.8)',
+    elevation: 2,
+    shadowColor: '#006A66',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
-  backButton: {
-    padding: Theme.spacing.xs,
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 106, 102, 0.1)',
+    shadowColor: '#006A66',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  backText: {
-    color: Theme.colors.error,
-    ...Theme.typography.labelMd,
-    fontWeight: '600',
-  },
-  title: {
-    ...Theme.typography.headlineMd,
-    color: Theme.colors.text,
-  },
-  saveButton: {
-    padding: Theme.spacing.xs,
-  },
-  saveText: {
-    color: Theme.colors.primaryDark,
-    ...Theme.typography.labelMd,
+  headerBackText: {
+    fontSize: 13,
     fontWeight: '700',
+    color: Theme.colors.primaryDark,
+    marginLeft: 2,
+  },
+  headerTitle: {
+    ...Theme.typography.headlineMd,
+    color: '#0D2C2A',
+    fontWeight: '800',
+    fontSize: 19,
+  },
+  headerSaveButtonWrapper: {
+    shadowColor: '#2BA8A2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerSaveButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerSaveText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   disabledText: {
     opacity: 0.5,
@@ -406,122 +564,209 @@ const styles = StyleSheet.create({
     gap: Theme.spacing.md,
   },
   errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Theme.colors.errorBg,
     padding: Theme.spacing.md,
     borderRadius: Theme.rounded.md,
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.15)',
   },
   errorText: {
     color: Theme.colors.error,
     ...Theme.typography.labelMd,
-    textAlign: 'center',
+    fontWeight: '600',
+    flex: 1,
   },
   card: {
     backgroundColor: Theme.colors.surface,
     borderRadius: Theme.rounded.xl,
-    padding: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    ...Theme.shadows,
+    padding: Theme.spacing.lg - 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.7)',
+    shadowColor: '#006A66',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+  },
+  amountCard: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.rounded.xl,
+    padding: Theme.spacing.lg - 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.7)',
+    shadowColor: '#006A66',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    alignItems: 'center',
+  },
+  amountCardFocused: {
+    borderColor: Theme.colors.primary,
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
   },
   cardLabel: {
     ...Theme.typography.labelSm,
     color: Theme.colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 1.2,
     marginBottom: Theme.spacing.xs,
   },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Theme.spacing.xs,
+    marginTop: 6,
+    width: '100%',
   },
   currencySymbol: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: Theme.colors.text,
+    fontSize: 34,
+    fontWeight: '800',
+    color: Theme.colors.primary,
     marginRight: 6,
   },
   amountInput: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: Theme.colors.text,
-    minWidth: 120,
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#0D2C2A',
+    minWidth: 150,
     textAlign: 'left',
+    paddingVertical: 0,
   },
   categoryScroll: {
-    paddingVertical: Theme.spacing.xs,
-    gap: Theme.spacing.xs,
+    paddingVertical: Theme.spacing.base,
+    gap: 8,
   },
-  categoryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceContainerLow,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.rounded.full,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    marginRight: 6,
+  categoryBtnWrapper: {
+    marginRight: 8,
   },
   categoryBtnSelected: {
-    backgroundColor: 'rgba(43, 168, 162, 0.1)',
-    borderColor: Theme.colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primaryDark,
+  },
+  categoryBtnUnselected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.7)',
   },
   categoryEmoji: {
     fontSize: 16,
-    marginRight: 4,
+    marginRight: 6,
   },
   categoryBtnText: {
     ...Theme.typography.labelSm,
     color: Theme.colors.textSecondary,
+    fontWeight: '700',
   },
   categoryBtnTextSelected: {
-    color: Theme.colors.primaryDark,
+    color: '#FFFFFF',
+    ...Theme.typography.labelSm,
+    fontWeight: '700',
   },
   payerScroll: {
-    paddingVertical: Theme.spacing.xs,
-    gap: Theme.spacing.xs,
+    paddingVertical: Theme.spacing.base,
   },
-  payerBtn: {
-    backgroundColor: Theme.colors.surfaceContainerLow,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.rounded.md,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
+  payerCard: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 65,
   },
-  payerBtnSelected: {
-    backgroundColor: Theme.colors.primary,
-    borderColor: Theme.colors.primaryDark,
+  payerAvatarOuterRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 6,
   },
-  payerBtnText: {
-    ...Theme.typography.labelSm,
-    color: Theme.colors.text,
+  payerAvatarSelected: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  payerBtnTextSelected: {
+  payerAvatarUnselected: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.8)',
+    marginBottom: 6,
+  },
+  payerAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+  },
+  payerAvatarTextSelected: {
     color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  avatarCheckBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    backgroundColor: Theme.colors.primaryDark,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  payerNameText: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  payerNameTextSelected: {
+    color: Theme.colors.primaryDark,
     fontWeight: '700',
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: Theme.colors.surfaceContainerLow,
+    backgroundColor: 'rgba(243, 244, 246, 0.8)',
     borderRadius: Theme.rounded.md,
-    padding: 2,
+    padding: 3,
     marginVertical: Theme.spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(229, 231, 235, 0.5)',
   },
   toggleBtn: {
     flex: 1,
-    paddingVertical: Theme.spacing.xs,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: Theme.rounded.sm,
+    borderRadius: Theme.rounded.sm + 2,
   },
   toggleBtnActive: {
     backgroundColor: '#FFFFFF',
-    ...Theme.shadows,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 106, 102, 0.15)',
   },
   toggleText: {
-    ...Theme.typography.labelSm,
+    fontSize: 13,
+    fontWeight: '600',
     color: Theme.colors.textSecondary,
   },
   toggleTextActive: {
@@ -530,31 +775,33 @@ const styles = StyleSheet.create({
   },
   splitList: {
     marginTop: Theme.spacing.md,
-    gap: Theme.spacing.sm,
+    gap: 8,
   },
   splitRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.xs,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(229, 231, 235, 0.4)',
   },
   splitRowCustom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.xs,
+    paddingVertical: 8,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.md,
+    gap: 12,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: Theme.colors.textSecondary,
+    borderColor: 'rgba(156, 163, 175, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -562,49 +809,120 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.primary,
     borderColor: Theme.colors.primary,
   },
-  checkboxCheckmark: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  memberMiniAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(43, 168, 162, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(43, 168, 162, 0.15)',
+  },
+  memberMiniAvatarText: {
+    fontSize: 10,
     fontWeight: '700',
+    color: Theme.colors.primaryDark,
+  },
+  memberInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   splitName: {
-    ...Theme.typography.labelMd,
-    color: Theme.colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#37474F',
   },
   splitShareText: {
-    ...Theme.typography.labelSm,
+    fontSize: 13,
     color: Theme.colors.textSecondary,
     fontWeight: '600',
+  },
+  splitShareTextActive: {
+    color: Theme.colors.primaryDark,
+    fontWeight: '700',
   },
   customInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.8)',
     borderRadius: Theme.rounded.md,
     paddingHorizontal: Theme.spacing.sm,
-    width: 100,
-    height: 36,
+    backgroundColor: '#FAFAFA',
+    width: 110,
+    height: 38,
+  },
+  customInputWrapperFocused: {
+    borderColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
+    shadowColor: Theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
   },
   currencyPrefix: {
-    ...Theme.typography.labelSm,
-    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.primary,
     marginRight: 4,
   },
   customSplitInput: {
     flex: 1,
-    color: Theme.colors.text,
-    ...Theme.typography.labelSm,
+    color: '#0D2C2A',
+    fontWeight: '700',
+    fontSize: 13,
     padding: 0,
   },
-  notesInput: {
-    height: 48,
+  splitStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Theme.spacing.sm + 2,
+    borderRadius: Theme.rounded.md,
+    marginTop: Theme.spacing.md,
+    gap: 6,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+  },
+  splitStatusBannerSuccess: {
+    backgroundColor: Theme.colors.successBg,
+    borderColor: 'rgba(0, 110, 40, 0.15)',
+  },
+  splitStatusBannerWarning: {
+    backgroundColor: Theme.colors.warningBg,
+    borderColor: 'rgba(214, 138, 0, 0.15)',
+  },
+  splitStatusBannerError: {
+    backgroundColor: Theme.colors.errorBg,
+    borderColor: 'rgba(186, 26, 26, 0.15)',
+  },
+  splitStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notesInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: 'rgba(229, 231, 235, 0.7)',
     borderRadius: Theme.rounded.md,
     paddingHorizontal: Theme.spacing.md,
-    color: Theme.colors.text,
-    ...Theme.typography.bodyMd,
+    backgroundColor: 'rgba(249, 250, 251, 0.8)',
     marginTop: Theme.spacing.xs,
+  },
+  notesInputWrapperFocused: {
+    borderColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
+  },
+  notesIcon: {
+    marginRight: 10,
+  },
+  notesInput: {
+    flex: 1,
+    height: '100%',
+    color: '#0D2C2A',
+    ...Theme.typography.bodyMd,
   },
 });

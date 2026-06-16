@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Expense = require('../models/Expense');
 const Settlement = require('../models/Settlement');
 const Notification = require('../models/Notification');
+const { sendPushNotification } = require('../utils/pushNotification');
 
 // Helper to generate a unique 6-character group code
 const generateGroupCode = async () => {
@@ -100,6 +101,15 @@ const joinGroup = async (req, res) => {
       message: `${req.user.name} joined the group`,
       type: 'member_joined',
     });
+
+    // Send push notification to other group members
+    const otherMembers = group.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+    sendPushNotification(
+      otherMembers,
+      `New Member in ${group.name}`,
+      `${req.user.name} joined the group`,
+      { groupId: group._id.toString() }
+    );
 
     res.json(group);
   } catch (error) {

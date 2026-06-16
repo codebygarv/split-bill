@@ -318,6 +318,55 @@ const changePassword = async (req, res) => {
   }
 };
 
+// @desc    Save/Register push token
+// @route   POST /api/auth/push-token
+// @access  Private
+const savePushToken = async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken) {
+      return res.status(400).json({ message: 'Push token required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Add pushToken to array if not already present
+    if (!user.pushTokens.includes(pushToken)) {
+      user.pushTokens.push(pushToken);
+      await user.save();
+    }
+
+    res.json({ message: 'Push token saved successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Remove/Unregister push token on logout
+// @route   POST /api/auth/logout-push-token
+// @access  Private
+const removePushToken = async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken) {
+      return res.status(400).json({ message: 'Push token required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (user) {
+      user.pushTokens = user.pushTokens.filter(token => token !== pushToken);
+      await user.save();
+    }
+
+    res.json({ message: 'Push token removed successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -326,4 +375,6 @@ module.exports = {
   getUserProfile,
   updateUserProfile,
   changePassword,
+  savePushToken,
+  removePushToken,
 };

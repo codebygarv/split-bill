@@ -1,6 +1,7 @@
 const Expense = require('../models/Expense');
 const Group = require('../models/Group');
 const Notification = require('../models/Notification');
+const { sendPushNotification } = require('../utils/pushNotification');
 
 // @desc    Add a new expense to a group
 // @route   POST /api/expenses
@@ -93,6 +94,15 @@ const addExpense = async (req, res) => {
       type: 'expense_added',
     });
 
+    // Send push notification to other group members
+    const otherMembers = groupObj.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+    sendPushNotification(
+      otherMembers,
+      `New Bill in ${groupObj.name}`,
+      `${payerName} added ${formattedAmount} for ${category}`,
+      { groupId }
+    );
+
     res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -169,11 +179,21 @@ const updateExpense = async (req, res) => {
     const updatedExpense = await expense.save();
 
     // Log Notification
+    const msg = `${req.user.name} updated the expense of ${updatedExpense.category}`;
     await Notification.create({
       group: expense.group,
-      message: `${req.user.name} updated the expense of ${updatedExpense.category}`,
+      message: msg,
       type: 'expense_updated',
     });
+
+    // Send push notification to other group members
+    const otherMembers = groupObj.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+    sendPushNotification(
+      otherMembers,
+      `Bill Updated in ${groupObj.name}`,
+      msg,
+      { groupId: expense.group.toString() }
+    );
 
     res.json(updatedExpense);
   } catch (error) {
@@ -205,11 +225,21 @@ const deleteExpense = async (req, res) => {
     await expense.deleteOne();
 
     // Log Notification
+    const msg = `${req.user.name} deleted the expense of ${formattedAmount} for ${deletedExpenseCategory}`;
     await Notification.create({
       group: groupObj._id,
-      message: `${req.user.name} deleted the expense of ${formattedAmount} for ${deletedExpenseCategory}`,
+      message: msg,
       type: 'expense_deleted',
     });
+
+    // Send push notification to other group members
+    const otherMembers = groupObj.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+    sendPushNotification(
+      otherMembers,
+      `Bill Deleted in ${groupObj.name}`,
+      msg,
+      { groupId: groupObj._id.toString() }
+    );
 
     res.json({ message: 'Expense removed successfully' });
   } catch (error) {

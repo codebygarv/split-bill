@@ -21,9 +21,9 @@ export default function OTPScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { verifyOtp, resendOtp } = useAuth();
-  
+
   const email = typeof params.email === 'string' ? params.email : '';
-  
+
   const [otp, setOtp] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export default function OTPScreen() {
       setErrorMsg('Please enter a valid 6-digit code');
       return;
     }
-    
+
     setErrorMsg(null);
     setSuccessMsg(null);
     setIsSubmitting(true);
@@ -98,7 +98,7 @@ export default function OTPScreen() {
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          
+
           <View style={styles.header}>
             <View style={styles.logoOuterGlow}>
               <View style={styles.logoShadowWrapper}>
@@ -125,19 +125,19 @@ export default function OTPScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>6-Digit Verification Code</Text>
-              
+
               {/* Custom 6-cell visual display */}
-              <TouchableOpacity 
-                style={styles.otpBoxesContainer} 
-                activeOpacity={1} 
+              <TouchableOpacity
+                style={styles.otpBoxesContainer}
+                activeOpacity={1}
                 onPress={focusOtpInput}
               >
                 {pinCells.map((_, index) => {
                   const char = otp[index] || '';
                   const isCurrentFocused = isFocused && (index === otp.length || (index === 5 && otp.length === 6));
                   return (
-                    <View 
-                      key={index} 
+                    <View
+                      key={index}
                       style={[
                         styles.otpCell,
                         char ? styles.otpCellFilled : null,
@@ -200,7 +200,7 @@ export default function OTPScreen() {
                 </Text>
               )}
             </View>
-            
+
             <View style={[styles.registerLinkContainer, { marginTop: Theme.spacing.xs }]}>
               <TouchableOpacity onPress={() => router.replace('/login')} activeOpacity={0.7}>
                 <View style={styles.backToLoginInner}>

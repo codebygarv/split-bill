@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { registerForPushNotificationsAsync } from '../services/pushNotifications';
 
 interface User {
   _id: string;
@@ -36,10 +37,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [pushToken, setPushToken] = useState<string | null>(null);
 
   useEffect(() => {
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    const initPush = async () => {
+      if (user && token) {
+        const tokenVal = await registerForPushNotificationsAsync();
+        if (tokenVal) {
+          setPushToken(tokenVal);
+          try {
+            await api.post('/auth/push-token', { pushToken: tokenVal });
+          } catch (err) {
+            console.log('Failed to upload push token:', err);
+          }
+        }
+      }
+    };
+    initPush();
+  }, [user, token]);
 
   const restoreSession = async () => {
     try {
@@ -118,9 +137,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
+      if (pushToken) {
+        try {
+          await api.post('/auth/logout-push-token', { pushToken });
+        } catch (err) {
+          console.log('Failed to clear push token on logout:', err);
+        }
+      }
       await AsyncStorage.removeItem('token');
       setToken(null);
       setUser(null);
+      setPushToken(null);
       delete api.defaults.headers.common['Authorization'];
     } catch (err) {
       console.log('Failed to clear session:', err);

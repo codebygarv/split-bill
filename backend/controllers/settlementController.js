@@ -2,6 +2,7 @@ const Settlement = require('../models/Settlement');
 const Group = require('../models/Group');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const { sendPushNotification } = require('../utils/pushNotification');
 
 // @desc    Log a new settlement (Mark as Paid)
 // @route   POST /api/settlements
@@ -45,6 +46,15 @@ const logSettlement = async (req, res) => {
       type: 'settlement_logged',
     });
 
+    // Send push notification to other group members
+    const otherMembers = groupObj.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+    sendPushNotification(
+      otherMembers,
+      `Payment Sent in ${groupObj.name}`,
+      `${debtorName} marked ${formattedAmount} as paid to ${creditorName}`,
+      { groupId }
+    );
+
     res.status(201).json(settlement);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -85,6 +95,18 @@ const approveSettlement = async (req, res) => {
       message: `${creditorName} confirmed receipt of ${formattedAmount} from ${debtorName}`,
       type: 'settlement_completed',
     });
+
+    // Send push notification to other group members
+    const groupObj = await Group.findById(settlement.group);
+    if (groupObj) {
+      const otherMembers = groupObj.members.filter(memberId => memberId.toString() !== req.user._id.toString());
+      sendPushNotification(
+        otherMembers,
+        `Payment Confirmed in ${groupObj.name}`,
+        `${creditorName} confirmed receipt of ${formattedAmount} from ${debtorName}`,
+        { groupId: settlement.group.toString() }
+      );
+    }
 
     res.json(settlement);
   } catch (error) {

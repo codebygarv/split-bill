@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../../constants/theme';
+import { Platform, Pressable } from 'react-native';
 
 export default function TabsLayout() {
   return (
@@ -10,6 +11,28 @@ export default function TabsLayout() {
         headerShown: false,
         sceneStyle: { backgroundColor: Theme.colors.background },
         tabBarActiveTintColor: Theme.colors.primary,
+        tabBarStyle: {
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          shadowOffset: { width: 0, height: 0 },
+          backgroundColor: Theme.colors.surface,
+        },
+        tabBarButton: ({ ref, ...rest }) => (
+          <Pressable
+            {...rest}
+            ref={ref as any}
+            android_ripple={null}
+            style={({ pressed }) => [
+              rest.style,
+              Platform.select({
+                web: {
+                  outlineStyle: 'none',
+                } as any,
+              }),
+            ]}
+          />
+        ),
       }}
     >
       <Tabs.Screen name="dashboard" options={{
@@ -31,3 +54,4 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+

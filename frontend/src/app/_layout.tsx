@@ -6,6 +6,27 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
+import Constants from 'expo-constants';
+
+// Dynamically setup notification handler to prevent Expo Go SDK 53+ crash
+try {
+  const isExpoGo = Constants.appOwnership === 'expo';
+  if (!isExpoGo) {
+    const Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
+} catch (e) {
+  console.log('Failed to setup notifications handler:', e);
+}
+
 
 function NavigationGuard() {
   const { user, loading: authLoading } = useAuth();
