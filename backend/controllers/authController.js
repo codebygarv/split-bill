@@ -4,11 +4,6 @@ const nodemailer = require('nodemailer');
 
 let transporter;
 const setupTransporter = async () => {
-  if (process.env.RESEND_API_KEY) {
-    // Skip transporter setup since we are using Resend
-    return;
-  }
-
   if (process.env.SMTP_HOST) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -37,10 +32,7 @@ const setupTransporter = async () => {
     }
   }
 };
-// Run setupTransporter asynchronously, but don't let it block startup if there's no internet/SMTP configuration.
-if (!process.env.RESEND_API_KEY) {
-  setupTransporter();
-}
+setupTransporter();
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'super_secret_jwt_key_split_bill_app_2026', {
@@ -51,53 +43,20 @@ const generateToken = (id) => {
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const sendOTPEmail = async (email, otp) => {
-  try {
-    if (process.env.RESEND_API_KEY) {
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `SplitBill <${fromEmail}>`,
-          to: email,
-          subject: 'Your Verification Code',
-          text: `Your OTP for SplitBill is: ${otp}. It will expire in 10 minutes.`,
-          html: `<h3>Welcome to SplitBill!</h3><p>Your verification code is: <strong>${otp}</strong></p><p>It will expire in 10 minutes.</p>`,
-        }),
-      });
+  if (!transporter) await setupTransporter();
+  
+  const mailOptions = {
+    from: '"SplitBill App" <noreply@splitbill.com>',
+    to: email,
+    subject: 'Your Verification Code',
+    text: `Your OTP for SplitBill is: ${otp}. It will expire in 10 minutes.`,
+    html: `<h3>Welcome to SplitBill!</h3><p>Your verification code is: <strong>${otp}</strong></p><p>It will expire in 10 minutes.</p>`,
+  };
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Resend Error: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('OTP Email sent via Resend: %s', data.id);
-      return;
-    }
-
-    if (!transporter) await setupTransporter();
-    
-    const mailOptions = {
-      from: '"SplitBill App" <noreply@splitbill.com>',
-      to: email,
-      subject: 'Your Verification Code',
-      text: `Your OTP for SplitBill is: ${otp}. It will expire in 10 minutes.`,
-      html: `<h3>Welcome to SplitBill!</h3><p>Your verification code is: <strong>${otp}</strong></p><p>It will expire in 10 minutes.</p>`,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log('OTP Email sent: %s', info.messageId);
-    if (info.messageId && !process.env.SMTP_HOST) {
-       console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-    }
-  } catch (error) {
-    console.error('Email sending failed, but continuing user flow. Error:', error.message);
-    // Catching the error here ensures that registration/login does not crash and fail 
-    // when email sending has issues (e.g. unverified Resend domain testing).
+  const info = await transporter.sendMail(mailOptions);
+  console.log('OTP Email sent: %s', info.messageId);
+  if (info.messageId && !process.env.SMTP_HOST) {
+     console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
   }
 };
 
