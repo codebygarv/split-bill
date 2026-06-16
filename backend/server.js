@@ -2,6 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+const dns = require('dns');
+
+// Force IPv4 for network requests (fixes ENETUNREACH for SMTP on Render)
+dns.setDefaultResultOrder('ipv4first');
 
 // Load environment variables
 dotenv.config();
