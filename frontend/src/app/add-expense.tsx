@@ -9,6 +9,9 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  LayoutAnimation,
+  UIManager,
+  Dimensions,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
@@ -18,6 +21,13 @@ import api from '../services/api';
 import { Theme } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const CATEGORIES = [
   { name: 'Vegetables', emoji: '🥬' },
@@ -40,7 +50,8 @@ interface Member {
 export default function AddExpenseScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activeGroupId, refreshActiveGroup } = useGroup();
+  const { activeGroupId } = useGroup();
+  const queryClient = useQueryClient();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -52,16 +63,16 @@ export default function AddExpenseScreen() {
   const [paidBy, setPaidBy] = useState(user?._id || '');
   const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
 
-  // List of member IDs selected for equal split
+  const handleSplitTypeChange = (type: 'equal' | 'custom') => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSplitType(type);
+  };
+
   const [splitMembers, setSplitMembers] = useState<string[]>([]);
-
-  // Custom split amounts: key is userId, value is amount string
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
-
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Focus States
   const [amountFocused, setAmountFocused] = useState(false);
   const [notesFocused, setNotesFocused] = useState(false);
   const [focusedCustomInput, setFocusedCustomInput] = useState<string | null>(null);
@@ -76,11 +87,9 @@ export default function AddExpenseScreen() {
       setLoadingMembers(true);
       const res = await api.get(`/groups/${activeGroupId}`);
       setMembers(res.data.members);
-      // Pre-select all members for splitting
       const memberIds = res.data.members.map((m: Member) => m._id);
       setSplitMembers(memberIds);
 
-      // Initialize custom splits state with empty strings
       const initialCustom: Record<string, string> = {};
       memberIds.forEach((id: string) => {
         initialCustom[id] = '';
@@ -95,7 +104,6 @@ export default function AddExpenseScreen() {
 
   const handleToggleMember = (memberId: string) => {
     if (splitMembers.includes(memberId)) {
-      // Don't allow empty selection
       if (splitMembers.length > 1) {
         setSplitMembers(splitMembers.filter(id => id !== memberId));
       }
@@ -134,7 +142,6 @@ export default function AddExpenseScreen() {
         if (splitType === 'equal') {
           payload.splitMembers = splitMembers;
         } else {
-          // custom splits
           const activeSplits = Object.keys(customSplits)
             .map(userId => ({
               user: userId,
@@ -155,7 +162,7 @@ export default function AddExpenseScreen() {
         }
 
         await api.post('/expenses', payload);
-        await refreshActiveGroup();
+        queryClient.invalidateQueries({ queryKey: ['dashboard', activeGroupId] });
         router.back();
       } catch (err: any) {
         setErrorMsg(err.message || err.response?.data?.message || 'Failed to add expense');
@@ -163,17 +170,7 @@ export default function AddExpenseScreen() {
     });
   };
 
-  if (loadingMembers) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-      </View>
-    );
-  }
-
   const numericAmount = parseFloat(amount) || 0;
-
-  // Live custom splits validation
   const customSplitsSum = Object.keys(customSplits).reduce(
     (acc, id) => acc + (parseFloat(customSplits[id]) || 0),
     0
@@ -181,612 +178,586 @@ export default function AddExpenseScreen() {
   const remainingAmount = numericAmount - customSplitsSum;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAwareScrollView
-        style={styles.keyboardView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="always"
-        showsVerticalScrollIndicator={false}
-        enableOnAndroid={true}
-        extraScrollHeight={220}
-      >
-        {/* Header */}
+    <LinearGradient
+      colors={['#004D4A', '#006A66', '#2BA8A2']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackButton} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={20} color={Theme.colors.primaryDark} />
-            <Text style={styles.headerBackText}>Back</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add Expense</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <KeyboardAwareScrollView
+          style={styles.keyboardView}
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+          enableOnAndroid={true}
+          extraScrollHeight={120}
+        >
+          <View style={styles.amountSection}>
+            <Text style={styles.amountPrompt}>How much?</Text>
+            <View style={styles.amountInputRow}>
+              <Text style={[styles.currencySymbol, amountFocused && styles.currencySymbolActive]}>₹</Text>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="0"
+                placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+                onFocus={() => setAmountFocused(true)}
+                onBlur={() => setAmountFocused(false)}
+                selectionColor="#FFFFFF"
+                autoFocus
+              />
+            </View>
+          </View>
+
+          <View style={styles.bottomSheet}>
+            {errorMsg && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={{ marginRight: 6 }} />
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            )}
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+                {CATEGORIES.map((cat) => {
+                  const isSelected = category === cat.name;
+                  return (
+                    <TouchableOpacity
+                      key={cat.name}
+                      style={styles.categoryBubbleWrapper}
+                      onPress={() => setCategory(cat.name)}
+                      activeOpacity={0.8}
+                    >
+                      {isSelected ? (
+                        <LinearGradient
+                          colors={['#2BA8A2', '#007A75']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.categoryBubbleSelected}
+                        >
+                          <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                          <Text style={styles.categoryTextSelected}>{cat.name}</Text>
+                        </LinearGradient>
+                      ) : (
+                        <View style={styles.categoryBubbleUnselected}>
+                          <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                          <Text style={styles.categoryText}>{cat.name}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Paid By</Text>
+              {loadingMembers ? (
+                <ActivityIndicator size="small" color={Theme.colors.primary} style={{ alignSelf: 'flex-start', marginLeft: 8 }} />
+              ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerScroll}>
+                {members.map((member) => {
+                  const isSelected = paidBy === member._id;
+                  const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={member._id}
+                      style={styles.payerCard}
+                      onPress={() => setPaidBy(member._id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.payerAvatarOuter, isSelected && styles.payerAvatarOuterSelected]}>
+                        <View style={[styles.payerAvatarInner, isSelected && styles.payerAvatarInnerSelected]}>
+                          <Text style={[styles.payerInitials, isSelected && styles.payerInitialsSelected]}>
+                            {initials}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <View style={styles.checkBadge}>
+                            <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.payerName, isSelected && styles.payerNameSelected]} numberOfLines={1}>
+                        {member.name === user?.name ? 'You' : member.name.split(' ')[0]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.splitHeaderRow}>
+                <Text style={styles.sectionTitle}>Split Options</Text>
+              </View>
+              <View style={styles.segmentControl}>
+                <TouchableOpacity
+                  style={[styles.segmentBtn, splitType === 'equal' && styles.segmentBtnActive]}
+                  onPress={() => handleSplitTypeChange('equal')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.segmentText, splitType === 'equal' && styles.segmentTextActive]}>Equally</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segmentBtn, splitType === 'custom' && styles.segmentBtnActive]}
+                  onPress={() => handleSplitTypeChange('custom')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.segmentText, splitType === 'custom' && styles.segmentTextActive]}>Custom</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.splitList}>
+                {loadingMembers ? (
+                  <ActivityIndicator size="small" color={Theme.colors.primary} style={{ marginTop: 10 }} />
+                ) : members.map((member) => {
+                  const isSelected = splitMembers.includes(member._id);
+                  const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+                  if (splitType === 'equal') {
+                    const share = isSelected ? (numericAmount / splitMembers.length) : 0;
+                    return (
+                      <TouchableOpacity
+                        key={member._id}
+                        style={styles.splitRow}
+                        onPress={() => handleToggleMember(member._id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.splitRowLeft}>
+                          <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                            {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                          </View>
+                          <View style={styles.miniAvatar}>
+                            <Text style={styles.miniAvatarText}>{initials}</Text>
+                          </View>
+                          <Text style={styles.splitMemberName}>
+                            {member.name === user?.name ? 'You' : member.name}
+                          </Text>
+                        </View>
+                        <Text style={[styles.splitAmountEqual, isSelected && styles.splitAmountEqualActive]}>
+                          {share > 0 ? `₹${share.toFixed(2)}` : 'Excluded'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return (
+                      <View key={member._id} style={styles.splitRowCustom}>
+                        <View style={styles.splitRowLeft}>
+                          <View style={styles.miniAvatar}>
+                            <Text style={styles.miniAvatarText}>{initials}</Text>
+                          </View>
+                          <Text style={styles.splitMemberName}>
+                            {member.name === user?.name ? 'You' : member.name}
+                          </Text>
+                        </View>
+                        <View style={[
+                          styles.customInputContainer,
+                          focusedCustomInput === member._id && styles.customInputContainerActive
+                        ]}>
+                          <Text style={styles.customCurrency}>₹</Text>
+                          <TextInput
+                            style={styles.customInput}
+                            placeholder="0.00"
+                            placeholderTextColor="rgba(13, 44, 42, 0.3)"
+                            keyboardType="numeric"
+                            value={customSplits[member._id] || ''}
+                            onChangeText={(val) => handleCustomSplitChange(member._id, val)}
+                            onFocus={() => setFocusedCustomInput(member._id)}
+                            onBlur={() => setFocusedCustomInput(null)}
+                            selectionColor={Theme.colors.primary}
+                          />
+                        </View>
+                      </View>
+                    );
+                  }
+                })}
+              </View>
+
+              {splitType === 'custom' && numericAmount > 0 && (
+                <View style={[
+                  styles.validationBanner,
+                  Math.abs(remainingAmount) < 0.05 ? styles.bannerSuccess :
+                    remainingAmount > 0 ? styles.bannerWarning : styles.bannerError
+                ]}>
+                  <Ionicons
+                    name={Math.abs(remainingAmount) < 0.05 ? "checkmark-circle" : "alert-circle"}
+                    size={18}
+                    color={
+                      Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
+                        remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                    }
+                  />
+                  <Text style={[
+                    styles.validationText,
+                    {
+                      color: Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
+                        remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                    }
+                  ]}>
+                    {Math.abs(remainingAmount) < 0.05 ? 'Split perfectly!' :
+                      remainingAmount > 0 ? `${remainingAmount.toFixed(2)} left to allocate` :
+                        `Over allocated by ${Math.abs(remainingAmount).toFixed(2)}`}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Notes</Text>
+              <View style={[styles.notesWrapper, notesFocused && styles.notesWrapperActive]}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={20}
+                  color={notesFocused ? Theme.colors.primary : '#9CA3AF'}
+                  style={{ marginRight: 10 }}
+                />
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="What was this for?"
+                  placeholderTextColor="#9CA3AF"
+                  value={notes}
+                  onChangeText={setNotes}
+                  onFocus={() => setNotesFocused(true)}
+                  onBlur={() => setNotesFocused(false)}
+                />
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </View>
+        </KeyboardAwareScrollView>
+
+        <View style={styles.floatingActionContainer}>
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={isPending}
-            style={styles.headerSaveButtonWrapper}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#2BA8A2', '#007A75']}
+              colors={isPending ? ['#9CA3AF', '#6B7280'] : ['#1F2937', '#111827']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.headerSaveButton, isPending && styles.saveButtonDisabled]}
+              style={styles.submitBtn}
             >
-              <Text style={styles.headerSaveText}>
-                {isPending ? 'Saving...' : 'Save'}
+              {isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              ) : (
+                <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
+              )}
+              <Text style={styles.submitBtnText}>
+                {isPending ? 'Saving Expense...' : 'Save Expense'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
-
-        {errorMsg && (
-          <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={{ marginRight: 6 }} />
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        )}
-
-        {/* Amount input */}
-        <LinearGradient
-          colors={amountFocused ? ['#FFFFFF', '#E6F4F2'] : ['#FFFFFF', '#F9FAFB']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.amountCard, amountFocused && styles.amountCardFocused]}
-        >
-          <Text style={styles.cardLabel}>AMOUNT</Text>
-          <View style={styles.amountInputRow}>
-            <Text style={styles.currencySymbol}>₹</Text>
-            <TextInput
-              style={styles.amountInput}
-              placeholder="0"
-              placeholderTextColor="rgba(13, 44, 42, 0.3)"
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              onFocus={() => setAmountFocused(true)}
-              onBlur={() => setAmountFocused(false)}
-              selectionColor={Theme.colors.primary}
-            />
-          </View>
-        </LinearGradient>
-
-        {/* Category selection */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>CATEGORY</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
-            {CATEGORIES.map((cat) => {
-              const isSelected = category === cat.name;
-              return (
-                <TouchableOpacity
-                  key={cat.name}
-                  style={styles.categoryBtnWrapper}
-                  onPress={() => setCategory(cat.name)}
-                  activeOpacity={0.8}
-                >
-                  {isSelected ? (
-                    <LinearGradient
-                      colors={['#2BA8A2', '#007A75']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.categoryBtnSelected}
-                    >
-                      <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                      <Text style={styles.categoryBtnTextSelected}>{cat.name}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <View style={styles.categoryBtnUnselected}>
-                      <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                      <Text style={styles.categoryBtnText}>{cat.name}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Paid By section */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>PAID BY</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerScroll}>
-            {members.map((member) => {
-              const isSelected = paidBy === member._id;
-              const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-              return (
-                <TouchableOpacity
-                  key={member._id}
-                  style={styles.payerCard}
-                  onPress={() => setPaidBy(member._id)}
-                  activeOpacity={0.8}
-                >
-                  {isSelected ? (
-                    <View style={styles.payerAvatarOuterRing}>
-                      <LinearGradient
-                        colors={['#2BA8A2', '#006A66']}
-                        style={styles.payerAvatarSelected}
-                      >
-                        <Text style={styles.payerAvatarTextSelected}>{initials}</Text>
-                      </LinearGradient>
-                      <View style={styles.avatarCheckBadge}>
-                        <Ionicons name="checkmark" size={9} color="#FFFFFF" />
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.payerAvatarUnselected}>
-                      <Text style={styles.payerAvatarText}>{initials}</Text>
-                    </View>
-                  )}
-                  <Text
-                    style={[
-                      styles.payerNameText,
-                      isSelected && styles.payerNameTextSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {member.name === user?.name ? 'You' : member.name.split(' ')[0]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Split Options section */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>SPLIT OPTIONS</Text>
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity
-              style={[styles.toggleBtn, splitType === 'equal' && styles.toggleBtnActive]}
-              onPress={() => setSplitType('equal')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.toggleText, splitType === 'equal' && styles.toggleTextActive]}>
-                Equally
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleBtn, splitType === 'custom' && styles.toggleBtnActive]}
-              onPress={() => setSplitType('custom')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.toggleText, splitType === 'custom' && styles.toggleTextActive]}>
-                Custom Amounts
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Split Details list */}
-          <View style={styles.splitList}>
-            {members.map((member) => {
-              const isSelected = splitMembers.includes(member._id);
-              const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
-              if (splitType === 'equal') {
-                const share = isSelected ? (numericAmount / splitMembers.length) : 0;
-                return (
-                  <TouchableOpacity
-                    key={member._id}
-                    style={styles.splitRow}
-                    onPress={() => handleToggleMember(member._id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.checkboxContainer}>
-                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                        {isSelected && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
-                      </View>
-                      <View style={styles.memberMiniAvatar}>
-                        <Text style={styles.memberMiniAvatarText}>{initials}</Text>
-                      </View>
-                      <Text style={styles.splitName}>
-                        {member.name === user?.name ? 'You' : member.name}
-                      </Text>
-                    </View>
-                    <Text style={[styles.splitShareText, isSelected && styles.splitShareTextActive]}>
-                      {share > 0 ? `₹${share.toFixed(2)}` : 'Excluded'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              } else {
-                // custom split input
-                return (
-                  <View key={member._id} style={styles.splitRowCustom}>
-                    <View style={styles.memberInfoRow}>
-                      <View style={styles.memberMiniAvatar}>
-                        <Text style={styles.memberMiniAvatarText}>{initials}</Text>
-                      </View>
-                      <Text style={styles.splitName}>
-                        {member.name === user?.name ? 'You' : member.name}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.customInputWrapper,
-                      focusedCustomInput === member._id && styles.customInputWrapperFocused
-                    ]}>
-                      <Text style={styles.currencyPrefix}>₹</Text>
-                      <TextInput
-                        style={styles.customSplitInput}
-                        placeholder="0.00"
-                        placeholderTextColor="rgba(13, 44, 42, 0.3)"
-                        keyboardType="numeric"
-                        value={customSplits[member._id] || ''}
-                        onChangeText={(val) => handleCustomSplitChange(member._id, val)}
-                        onFocus={() => setFocusedCustomInput(member._id)}
-                        onBlur={() => setFocusedCustomInput(null)}
-                        selectionColor={Theme.colors.primary}
-                      />
-                    </View>
-                  </View>
-                );
-              }
-            })}
-          </View>
-
-          {/* Custom split real-time validation status banner */}
-          {splitType === 'custom' && numericAmount > 0 && (
-            <View style={[
-              styles.splitStatusBanner,
-              Math.abs(remainingAmount) < 0.05 ? styles.splitStatusBannerSuccess :
-                remainingAmount > 0 ? styles.splitStatusBannerWarning : styles.splitStatusBannerError
-            ]}>
-              <Ionicons
-                name={Math.abs(remainingAmount) < 0.05 ? "checkmark-circle" : "alert-circle"}
-                size={16}
-                color={
-                  Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
-                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
-                }
-              />
-              <Text style={[
-                styles.splitStatusText,
-                {
-                  color: Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
-                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
-                }
-              ]}>
-                {Math.abs(remainingAmount) < 0.05 ? 'Total amount split perfectly!' :
-                  remainingAmount > 0 ? `Remaining to allocate: ₹${remainingAmount.toFixed(2)}` :
-                    `Over split by: ₹${Math.abs(remainingAmount).toFixed(2)}`}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Notes description */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>DESCRIPTION / NOTES (OPTIONAL)</Text>
-          <View style={[
-            styles.notesInputWrapper,
-            notesFocused && styles.notesInputWrapperFocused
-          ]}>
-            <Ionicons
-              name="document-text-outline"
-              size={20}
-              color={notesFocused ? Theme.colors.primary : Theme.colors.textSecondary}
-              style={styles.notesIcon}
-            />
-            <TextInput
-              style={styles.notesInput}
-              placeholder="What was this expense for?"
-              placeholderTextColor={Theme.colors.textSecondary}
-              value={notes}
-              onChangeText={setNotes}
-              onFocus={() => setNotesFocused(true)}
-              onBlur={() => setNotesFocused(false)}
-            />
-          </View>
-        </View>
-
-      </KeyboardAwareScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F7F5', // Seamless Mint background
-  },
-  keyboardView: {
-    flex: 1,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#F3F7F5',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#006A66',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Theme.spacing.marginMobile,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.8)',
-    elevation: 2,
-    shadowColor: '#006A66',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 20 : 10,
+    paddingBottom: 20,
   },
-  headerBackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 106, 102, 0.1)',
-    shadowColor: '#006A66',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerBackText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Theme.colors.primaryDark,
-    marginLeft: 2,
-  },
-  headerTitle: {
-    ...Theme.typography.headlineMd,
-    color: '#0D2C2A',
-    fontWeight: '800',
-    fontSize: 19,
-  },
-  headerSaveButtonWrapper: {
-    shadowColor: '#2BA8A2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  headerSaveButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+  backButton: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerSaveText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  disabledText: {
-    opacity: 0.5,
-  },
-  scrollContent: {
-    paddingHorizontal: Theme.spacing.marginMobile,
-    paddingTop: Theme.spacing.md,
-    paddingBottom: Theme.spacing.xl,
-    gap: Theme.spacing.md,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.colors.errorBg,
-    padding: Theme.spacing.md,
-    borderRadius: Theme.rounded.md,
-    borderWidth: 1,
-    borderColor: 'rgba(186, 26, 26, 0.15)',
-  },
-  errorText: {
-    color: Theme.colors.error,
-    ...Theme.typography.labelMd,
-    fontWeight: '600',
+  keyboardView: {
     flex: 1,
   },
-  card: {
-    backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.rounded.xl,
-    padding: Theme.spacing.lg - 4,
-    borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.7)',
-    shadowColor: '#006A66',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-  },
-  amountCard: {
-    backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.rounded.xl,
-    padding: Theme.spacing.lg - 4,
-    borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.7)',
-    shadowColor: '#006A66',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
+  amountSection: {
     alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 20,
   },
-  amountCardFocused: {
-    borderColor: Theme.colors.primary,
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-  },
-  cardLabel: {
-    ...Theme.typography.labelSm,
-    color: Theme.colors.textSecondary,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    marginBottom: Theme.spacing.xs,
+  amountPrompt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
   },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    width: '100%',
   },
   currencySymbol: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: Theme.colors.primary,
-    marginRight: 6,
+    fontSize: 48,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginRight: 8,
+    marginTop: -4,
+  },
+  currencySymbolActive: {
+    color: '#FFFFFF',
   },
   amountInput: {
-    fontSize: 42,
+    fontSize: 64,
     fontWeight: '800',
-    color: '#0D2C2A',
-    minWidth: 150,
-    textAlign: 'left',
-    paddingVertical: 0,
+    color: '#FFFFFF',
+    minWidth: 100,
+    textAlign: 'center',
+    padding: 0,
+    margin: 0,
+  },
+  bottomSheet: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 10,
+    minHeight: SCREEN_HEIGHT * 0.6,
+  },
+  section: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+    letterSpacing: 0.3,
   },
   categoryScroll: {
-    paddingVertical: Theme.spacing.base,
-    gap: 8,
+    paddingRight: 20,
+    gap: 12,
   },
-  categoryBtnWrapper: {
-    marginRight: 8,
+  categoryBubbleWrapper: {
+    shadowColor: '#006A66',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  categoryBtnSelected: {
+  categoryBubbleSelected: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.primaryDark,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
-  categoryBtnUnselected: {
+  categoryBubbleUnselected: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.7)',
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   categoryEmoji: {
     fontSize: 16,
-    marginRight: 6,
+    marginRight: 8,
   },
-  categoryBtnText: {
-    ...Theme.typography.labelSm,
-    color: Theme.colors.textSecondary,
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  categoryTextSelected: {
+    fontSize: 14,
     fontWeight: '700',
-  },
-  categoryBtnTextSelected: {
     color: '#FFFFFF',
-    ...Theme.typography.labelSm,
-    fontWeight: '700',
   },
   payerScroll: {
-    paddingVertical: Theme.spacing.base,
+    gap: 20,
+    paddingRight: 20,
   },
   payerCard: {
     alignItems: 'center',
-    marginRight: 16,
-    width: 65,
+    width: 60,
   },
-  payerAvatarOuterRing: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.primary,
+  payerAvatarOuter: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  payerAvatarSelected: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+  payerAvatarOuterSelected: {
+    borderColor: '#2BA8A2',
   },
-  payerAvatarUnselected: {
+  payerAvatarInner: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.8)',
-    marginBottom: 6,
   },
-  payerAvatarText: {
-    fontSize: 14,
+  payerAvatarInnerSelected: {
+    backgroundColor: '#E6F4F2',
+  },
+  payerInitials: {
+    fontSize: 16,
     fontWeight: '700',
-    color: Theme.colors.textSecondary,
+    color: '#6B7280',
   },
-  payerAvatarTextSelected: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+  payerInitialsSelected: {
+    color: '#006A66',
   },
-  avatarCheckBadge: {
+  checkBadge: {
     position: 'absolute',
-    right: -2,
     bottom: -2,
-    backgroundColor: Theme.colors.primaryDark,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    right: -2,
+    backgroundColor: '#2BA8A2',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  payerNameText: {
-    fontSize: 11,
-    color: Theme.colors.textSecondary,
+  payerName: {
+    fontSize: 12,
     fontWeight: '600',
-    textAlign: 'center',
+    color: '#6B7280',
   },
-  payerNameTextSelected: {
-    color: Theme.colors.primaryDark,
+  payerNameSelected: {
+    color: '#111827',
     fontWeight: '700',
   },
-  toggleContainer: {
+  splitHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(243, 244, 246, 0.8)',
-    borderRadius: Theme.rounded.md,
-    padding: 3,
-    marginVertical: Theme.spacing.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.5)',
-  },
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: Theme.rounded.sm + 2,
+    marginBottom: 16,
   },
-  toggleBtnActive: {
+  segmentControl: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentBtnActive: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 106, 102, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  toggleText: {
-    fontSize: 13,
+  segmentText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: Theme.colors.textSecondary,
+    color: '#6B7280',
   },
-  toggleTextActive: {
-    color: Theme.colors.primaryDark,
+  segmentTextActive: {
+    color: '#111827',
     fontWeight: '700',
   },
   splitList: {
-    marginTop: Theme.spacing.md,
-    gap: 8,
+    gap: 12,
   },
   splitRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.4)',
+    paddingVertical: 8,
+  },
+  splitRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  checkboxActive: {
+    backgroundColor: '#2BA8A2',
+    borderColor: '#2BA8A2',
+  },
+  miniAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  miniAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4B5563',
+  },
+  splitMemberName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  splitAmountEqual: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  splitAmountEqualActive: {
+    color: '#111827',
+    fontWeight: '700',
   },
   splitRowCustom: {
     flexDirection: 'row',
@@ -794,139 +765,122 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  checkboxContainer: {
+  customInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1.5,
-    borderColor: 'rgba(156, 163, 175, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    width: 120,
   },
-  checkboxChecked: {
-    backgroundColor: Theme.colors.primary,
-    borderColor: Theme.colors.primary,
-  },
-  memberMiniAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(43, 168, 162, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(43, 168, 162, 0.15)',
-  },
-  memberMiniAvatarText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Theme.colors.primaryDark,
-  },
-  memberInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  splitName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#37474F',
-  },
-  splitShareText: {
-    fontSize: 13,
-    color: Theme.colors.textSecondary,
-    fontWeight: '600',
-  },
-  splitShareTextActive: {
-    color: Theme.colors.primaryDark,
-    fontWeight: '700',
-  },
-  customInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.8)',
-    borderRadius: Theme.rounded.md,
-    paddingHorizontal: Theme.spacing.sm,
-    backgroundColor: '#FAFAFA',
-    width: 110,
-    height: 38,
-  },
-  customInputWrapperFocused: {
-    borderColor: Theme.colors.primary,
+  customInputContainerActive: {
+    borderColor: '#2BA8A2',
     backgroundColor: '#FFFFFF',
-    shadowColor: Theme.colors.primary,
+    shadowColor: '#2BA8A2',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 1,
+    elevation: 2,
   },
-  currencyPrefix: {
-    fontSize: 13,
+  customCurrency: {
+    fontSize: 15,
     fontWeight: '700',
-    color: Theme.colors.primary,
-    marginRight: 4,
+    color: '#2BA8A2',
+    marginRight: 6,
   },
-  customSplitInput: {
+  customInput: {
     flex: 1,
-    height: '100%',
-    color: '#0D2C2A',
+    fontSize: 15,
     fontWeight: '700',
-    fontSize: 13,
-    padding: 0,
+    color: '#111827',
+    height: '100%',
   },
-  splitStatusBanner: {
+  validationBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Theme.spacing.sm + 2,
-    borderRadius: Theme.rounded.md,
-    marginTop: Theme.spacing.md,
-    gap: 6,
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 16,
     borderWidth: 1,
+    gap: 8,
   },
-  splitStatusBannerSuccess: {
+  bannerSuccess: {
     backgroundColor: Theme.colors.successBg,
     borderColor: 'rgba(0, 110, 40, 0.15)',
   },
-  splitStatusBannerWarning: {
+  bannerWarning: {
     backgroundColor: Theme.colors.warningBg,
     borderColor: 'rgba(214, 138, 0, 0.15)',
   },
-  splitStatusBannerError: {
+  bannerError: {
     backgroundColor: Theme.colors.errorBg,
     borderColor: 'rgba(186, 26, 26, 0.15)',
   },
-  splitStatusText: {
-    fontSize: 12,
+  validationText: {
+    fontSize: 13,
     fontWeight: '700',
   },
-  notesInputWrapper: {
+  notesWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1.5,
-    borderColor: 'rgba(229, 231, 235, 0.7)',
-    borderRadius: Theme.rounded.md,
-    paddingHorizontal: Theme.spacing.md,
-    backgroundColor: 'rgba(249, 250, 251, 0.8)',
-    marginTop: Theme.spacing.xs,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 52,
   },
-  notesInputWrapperFocused: {
-    borderColor: Theme.colors.primary,
+  notesWrapperActive: {
+    borderColor: '#2BA8A2',
     backgroundColor: '#FFFFFF',
-  },
-  notesIcon: {
-    marginRight: 10,
   },
   notesInput: {
     flex: 1,
+    fontSize: 15,
+    color: '#111827',
     height: '100%',
-    color: '#0D2C2A',
-    ...Theme.typography.bodyMd,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.errorBg,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.2)',
+  },
+  errorText: {
+    color: Theme.colors.error,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  floatingActionContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 30 : 20,
+    left: 20,
+    right: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    borderRadius: 16,
+  },
+  submitBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

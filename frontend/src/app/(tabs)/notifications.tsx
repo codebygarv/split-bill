@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
   FlatList,
   StatusBar
 } from 'react-native';
@@ -15,6 +13,8 @@ import { useGroup } from '../../context/GroupContext';
 import api from '../../services/api';
 import { Theme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '../../components/Skeleton';
 
 interface NotificationItem {
   _id: string;
@@ -36,25 +36,15 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { activeGroupId } = useGroup();
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [activeGroupId]);
-
-  const fetchNotifications = async () => {
-    if (!activeGroupId) return;
-    try {
-      setLoading(true);
+  const { data: notifications = [], isLoading, refetch } = useQuery({
+    queryKey: ['notifications', activeGroupId],
+    queryFn: async () => {
+      if (!activeGroupId) return [];
       const res = await api.get(`/notifications/group/${activeGroupId}`);
-      setNotifications(res.data);
-    } catch (err) {
-      console.log('Failed to fetch notifications:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data as NotificationItem[];
+    },
+    enabled: !!activeGroupId,
+  });
 
   const formatTimeAgo = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -70,15 +60,6 @@ export default function NotificationsScreen() {
     return `${diffDays}d ago`;
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading Activity...</Text>
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -88,12 +69,24 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color={Theme.colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Group Activity</Text>
-        <TouchableOpacity onPress={fetchNotifications} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => refetch()} style={styles.iconBtn}>
           <Ionicons name="refresh" size={24} color={Theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
-      {notifications.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.listContent}>
+          {[1, 2, 3, 4, 5].map((key, index) => (
+            <View key={key} style={[styles.notificationRow, index !== 4 && styles.notificationRowBorder]}>
+              <Skeleton width={44} height={44} borderRadius={22} style={{ marginRight: Theme.spacing.md }} />
+              <View style={styles.messageContainer}>
+                <Skeleton width="90%" height={16} style={{ marginBottom: 6 }} />
+                <Skeleton width={60} height={12} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconBadge}>
              <Ionicons name="notifications-off-outline" size={40} color={Theme.colors.textSecondary} />
@@ -133,17 +126,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: Theme.spacing.sm,
-    color: Theme.colors.textSecondary,
-    ...Theme.typography.labelMd,
   },
   header: {
     flexDirection: 'row',

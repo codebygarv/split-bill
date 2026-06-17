@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,14 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
-  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useGroup } from '../context/GroupContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Theme } from '../constants/theme';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Skeleton } from '../components/Skeleton';
 
 interface SettlementRecord {
   _id: string;
@@ -27,29 +28,31 @@ interface SettlementRecord {
 export default function SettleUpScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { activeGroupId, activeGroupData, refreshActiveGroup } = useGroup();
+  const { activeGroupId } = useGroup();
+  const queryClient = useQueryClient();
 
-  const [settlementHistory, setSettlementHistory] = useState<SettlementRecord[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchHistory();
-  }, [activeGroupId]);
-
-  const fetchHistory = async () => {
-    if (!activeGroupId) return;
-    try {
-      setLoadingHistory(true);
+  const { data: settlementHistory = [], isLoading: loadingHistory } = useQuery({
+    queryKey: ['settlementHistory', activeGroupId],
+    queryFn: async () => {
+      if (!activeGroupId) return [];
       const res = await api.get(`/settlements/group/${activeGroupId}`);
-      setSettlementHistory(res.data);
-    } catch (err) {
-      console.log('Failed to fetch settlement history:', err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
+      return res.data as SettlementRecord[];
+    },
+    enabled: !!activeGroupId,
+  });
+
+  const { data: dashboardData, isLoading: loadingDashboard } = useQuery({
+    queryKey: ['dashboard', activeGroupId],
+    queryFn: async () => {
+      if (!activeGroupId) return null;
+      const res = await api.get(`/groups/${activeGroupId}/dashboard`);
+      return res.data;
+    },
+    enabled: !!activeGroupId,
+  });
 
   const handleMarkAsPaid = (toUserId: string, debtAmount: number) => {
     if (!activeGroupId) return;
@@ -62,8 +65,8 @@ export default function SettleUpScreen() {
           toUser: toUserId,
           amount: debtAmount,
         });
-        await refreshActiveGroup();
-        await fetchHistory();
+        await queryClient.invalidateQueries({ queryKey: ['dashboard', activeGroupId] });
+        await queryClient.invalidateQueries({ queryKey: ['settlementHistory', activeGroupId] });
       } catch (err: any) {
         setErrorMsg(err.response?.data?.message || 'Failed to submit settlement payment');
       }
@@ -76,8 +79,8 @@ export default function SettleUpScreen() {
     startTransition(async () => {
       try {
         await api.put(`/settlements/${settlementId}/approve`);
-        await refreshActiveGroup();
-        await fetchHistory();
+        await queryClient.invalidateQueries({ queryKey: ['dashboard', activeGroupId] });
+        await queryClient.invalidateQueries({ queryKey: ['settlementHistory', activeGroupId] });
       } catch (err: any) {
         setErrorMsg(err.response?.data?.message || 'Failed to confirm receipt');
       }
@@ -92,11 +95,10 @@ export default function SettleUpScreen() {
     }).format(val);
   };
 
-  const activeBalances = activeGroupData?.balances;
+  const activeBalances = dashboardData?.balances;
   const owesList = activeBalances?.owesList || [];
   const owedList = activeBalances?.owedList || [];
 
-  // Filter settlements where the current user is the recipient (toUser) and the status is pending
   const pendingIncomingSettlements = settlementHistory.filter(
     (s) => s.toUser?._id === user?._id && s.status === 'pending'
   );
@@ -120,7 +122,7 @@ export default function SettleUpScreen() {
         )}
 
         {/* 1. Pending Approvals (Mark as Received) */}
-        {pendingIncomingSettlements.length > 0 && (
+        {!loadingHistory && pendingIncomingSettlements.length > 0 && (
           <View style={[styles.card, styles.alertBorder]}>
             <Text style={[styles.cardTitle, styles.alertText]}>Pending Confirmations</Text>
             <Text style={styles.cardSubtitle}>Confirm if you have received these payments:</Text>
@@ -152,11 +154,23 @@ export default function SettleUpScreen() {
         {/* 2. Debts I Owe (Mark as Paid) */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>To Pay</Text>
-          {owesList.length === 0 ? (
+          {loadingDashboard ? (
+             <View style={styles.listContainer}>
+                {[1, 2].map((key) => (
+                  <View key={key} style={styles.settlementActionRow}>
+                    <View style={styles.rowInfo}>
+                      <Skeleton width={120} height={16} style={{ marginBottom: 4 }} />
+                      <Skeleton width={80} height={16} />
+                    </View>
+                    <Skeleton width={80} height={32} borderRadius={6} />
+                  </View>
+                ))}
+             </View>
+          ) : owesList.length === 0 ? (
             <Text style={styles.emptyText}>🎉 You do not owe anyone in this group.</Text>
           ) : (
             <View style={styles.listContainer}>
-              {owesList.map((item) => {
+              {owesList.map((item: any) => {
                 const isPendingLocal = settlementHistory.some(
                   (s) => s.fromUser?._id === user?._id && s.toUser?._id === item.user._id && s.status === 'pending'
                 );
@@ -190,11 +204,20 @@ export default function SettleUpScreen() {
         {/* 3. Debts Owed to Me */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>To Receive</Text>
-          {owedList.length === 0 ? (
+          {loadingDashboard ? (
+             <View style={styles.listContainer}>
+                {[1, 2].map((key) => (
+                  <View key={key} style={styles.debtOwedRow}>
+                     <Skeleton width={150} height={16} />
+                     <Skeleton width={60} height={16} />
+                  </View>
+                ))}
+             </View>
+          ) : owedList.length === 0 ? (
             <Text style={styles.emptyText}>Nobody owes you anything currently.</Text>
           ) : (
             <View style={styles.listContainer}>
-              {owedList.map((item) => (
+              {owedList.map((item: any) => (
                 <View key={item.user._id} style={styles.debtOwedRow}>
                   <Text style={styles.rowTextMain}>To Receive from {item.user.name}</Text>
                   <Text style={[styles.rowTextAmount, styles.greenText]}>
@@ -210,7 +233,20 @@ export default function SettleUpScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Settlement History</Text>
           {loadingHistory ? (
-            <ActivityIndicator size="small" color={Theme.colors.primary} />
+             <View style={styles.historyList}>
+               {[1, 2, 3].map((key) => (
+                  <View key={key} style={styles.historyRow}>
+                    <View>
+                      <Skeleton width={140} height={14} style={{ marginBottom: 4 }} />
+                      <Skeleton width={80} height={10} />
+                    </View>
+                    <View style={styles.historyRight}>
+                      <Skeleton width={60} height={14} style={{ marginBottom: 4 }} />
+                      <Skeleton width={40} height={14} borderRadius={10} />
+                    </View>
+                  </View>
+               ))}
+             </View>
           ) : settlementHistory.length === 0 ? (
             <Text style={styles.emptyText}>No settlement payments logged yet.</Text>
           ) : (

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Clipboard,
   StatusBar
 } from 'react-native';
@@ -16,6 +15,8 @@ import api from '../../services/api';
 import { Theme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '../../components/Skeleton';
 
 interface Member {
   _id: string;
@@ -33,31 +34,26 @@ export default function MembersScreen() {
   const router = useRouter();
   const { activeGroupId } = useGroup();
 
-  const [groupDetails, setGroupDetails] = useState<any>(null);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [activeGroupId]);
-
-  const fetchData = async () => {
-    if (!activeGroupId) return;
-    try {
-      setLoading(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ['members', activeGroupId],
+    queryFn: async () => {
+      if (!activeGroupId) return null;
       const [groupRes, expensesRes] = await Promise.all([
         api.get(`/groups/${activeGroupId}`),
         api.get(`/expenses/group/${activeGroupId}`),
       ]);
-      setGroupDetails(groupRes.data);
-      setExpenses(expensesRes.data);
-    } catch (err) {
-      console.log('Failed to fetch members data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return {
+        groupDetails: groupRes.data,
+        expenses: expensesRes.data as Expense[],
+      };
+    },
+    enabled: !!activeGroupId,
+  });
+
+  const groupDetails = data?.groupDetails;
+  const expenses = data?.expenses || [];
 
   const copyToClipboard = () => {
     if (groupDetails?.code) {
@@ -70,15 +66,6 @@ export default function MembersScreen() {
   const getExpensesCount = (userId: string) => {
     return expenses.filter((e) => e.paidBy?._id === userId).length;
   };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading Members...</Text>
-      </View>
-    );
-  }
 
   const members: Member[] = groupDetails?.members || [];
   const inviteCode = groupDetails?.code || '';
@@ -113,9 +100,13 @@ export default function MembersScreen() {
           
           <View style={styles.codeRow}>
             <View style={styles.codeBox}>
-              <Text style={styles.codeText}>{inviteCode}</Text>
+              {isLoading ? (
+                <Skeleton width={100} height={24} />
+              ) : (
+                <Text style={styles.codeText}>{inviteCode}</Text>
+              )}
             </View>
-            <TouchableOpacity style={styles.copyBtn} onPress={copyToClipboard} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.copyBtn} onPress={copyToClipboard} activeOpacity={0.8} disabled={isLoading}>
               <LinearGradient
                 colors={copied ? [Theme.colors.success, '#4CAF50'] : [Theme.colors.primary, Theme.colors.primaryDark]}
                 style={styles.copyBtnGradient}
@@ -128,37 +119,57 @@ export default function MembersScreen() {
 
         {/* Members List */}
         <View style={styles.membersSection}>
-          <Text style={styles.sectionTitle}>Members ({members.length})</Text>
+          <Text style={styles.sectionTitle}>
+            {isLoading ? <Skeleton width={120} height={20} /> : `Members (${members.length})`}
+          </Text>
           <View style={styles.membersList}>
-            {members.map((member, index) => {
-              const joinedDate = new Date(member.createdAt).toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-              });
-              const billsAdded = getExpensesCount(member._id);
-              const isLast = index === members.length - 1;
-
-              return (
-                <View key={member._id} style={[styles.memberRow, !isLast && styles.memberRowBorder]}>
+            {isLoading ? (
+              [1, 2, 3].map((key, index) => (
+                <View key={key} style={[styles.memberRow, index !== 2 && styles.memberRowBorder]}>
                   <View style={styles.memberLeft}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>
-                        {member.name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
+                    <Skeleton width={44} height={44} borderRadius={22} />
                     <View>
-                      <Text style={styles.memberName}>{member.name}</Text>
-                      <Text style={styles.memberJoined}>Joined {joinedDate}</Text>
+                      <Skeleton width={120} height={16} style={{ marginBottom: 4 }} />
+                      <Skeleton width={80} height={12} />
                     </View>
                   </View>
                   <View style={styles.memberRight}>
-                    <Text style={styles.memberBillsCount}>{billsAdded} bills</Text>
-                    <Text style={styles.memberRightLabel}>Added</Text>
+                    <Skeleton width={60} height={16} style={{ marginBottom: 4 }} />
+                    <Skeleton width={40} height={12} />
                   </View>
                 </View>
-              );
-            })}
+              ))
+            ) : (
+              members.map((member, index) => {
+                const joinedDate = new Date(member.createdAt).toLocaleDateString('en-IN', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                });
+                const billsAdded = getExpensesCount(member._id);
+                const isLast = index === members.length - 1;
+
+                return (
+                  <View key={member._id} style={[styles.memberRow, !isLast && styles.memberRowBorder]}>
+                    <View style={styles.memberLeft}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                          {member.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={styles.memberName}>{member.name}</Text>
+                        <Text style={styles.memberJoined}>Joined {joinedDate}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.memberRight}>
+                      <Text style={styles.memberBillsCount}>{billsAdded} bills</Text>
+                      <Text style={styles.memberRightLabel}>Added</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
         </View>
 
@@ -171,17 +182,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: Theme.spacing.sm,
-    color: Theme.colors.textSecondary,
-    ...Theme.typography.labelMd,
   },
   appBar: {
     flexDirection: 'row',

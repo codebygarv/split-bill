@@ -3,13 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { useAuth } from './AuthContext';
 
-interface GroupSummary {
+export interface GroupSummary {
   totalExpenses: number;
   thisMonthExpenses: number;
   pendingBalancesCount: number;
 }
 
-interface MemberBalance {
+export interface MemberBalance {
   user: {
     _id: string;
     name: string;
@@ -18,7 +18,7 @@ interface MemberBalance {
   amount: number;
 }
 
-interface GroupBalances {
+export interface GroupBalances {
   youOwe: number;
   youAreOwed: number;
   owesList: MemberBalance[];
@@ -31,7 +31,7 @@ interface GroupBalances {
   }>;
 }
 
-interface Expense {
+export interface Expense {
   _id: string;
   amount: number;
   category: string;
@@ -45,7 +45,7 @@ interface Expense {
   date: string;
 }
 
-interface GroupData {
+export interface GroupData {
   group: {
     _id: string;
     name: string;
@@ -58,15 +58,13 @@ interface GroupData {
   recentExpenses: Expense[];
 }
 
-interface GroupContextType {
+export interface GroupContextType {
   activeGroupId: string | null;
-  activeGroupData: GroupData | null;
   loading: boolean;
+
   createGroup: (name: string, type: string) => Promise<void>;
   joinGroup: (code: string) => Promise<void>;
   setActiveGroup: (id: string | null) => Promise<void>;
-  fetchDashboard: () => Promise<void>;
-  refreshActiveGroup: () => Promise<void>;
 }
 
 const GroupContext = createContext<GroupContextType | undefined>(undefined);
@@ -74,7 +72,6 @@ const GroupContext = createContext<GroupContextType | undefined>(undefined);
 export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, refreshUser } = useAuth();
   const [activeGroupId, setActiveGroupIdState] = useState<string | null>(null);
-  const [activeGroupData, setActiveGroupData] = useState<GroupData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   // Load last active group on mount or when user changes
@@ -83,18 +80,8 @@ export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       loadActiveGroup();
     } else {
       setActiveGroupIdState(null);
-      setActiveGroupData(null);
     }
   }, [user]);
-
-  // Refetch dashboard when active group ID changes
-  useEffect(() => {
-    if (activeGroupId) {
-      fetchDashboard();
-    } else {
-      setActiveGroupData(null);
-    }
-  }, [activeGroupId]);
 
   const loadActiveGroup = async () => {
     try {
@@ -120,23 +107,6 @@ export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (err) {
       console.log('Failed to load active group from storage:', err);
     }
-  };
-
-  const fetchDashboard = async () => {
-    if (!activeGroupId) return;
-    try {
-      setLoading(true);
-      const res = await api.get(`/groups/${activeGroupId}/dashboard`);
-      setActiveGroupData(res.data);
-    } catch (err) {
-      console.log('Failed to fetch group dashboard:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refreshActiveGroup = async () => {
-    await fetchDashboard();
   };
 
   const setActiveGroup = async (id: string | null) => {
@@ -188,13 +158,10 @@ export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     <GroupContext.Provider
       value={{
         activeGroupId,
-        activeGroupData,
         loading,
         createGroup,
         joinGroup,
         setActiveGroup,
-        fetchDashboard,
-        refreshActiveGroup,
       }}
     >
       {children}

@@ -7,6 +7,9 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 // Dynamically setup notification handler to prevent Expo Go SDK 53+ crash
 try {
@@ -92,11 +95,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: Theme.colors.background }}>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <GroupProvider>
-            <NavigationGuard />
-          </GroupProvider>
-        </AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <GroupProvider>
+              <NavigationGuard />
+            </GroupProvider>
+          </AuthProvider>
+        </QueryClientProvider>
       </SafeAreaView>
     </SafeAreaProvider>
   );

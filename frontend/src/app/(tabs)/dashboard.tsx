@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Share,
   Platform,
   StatusBar,
@@ -17,6 +16,9 @@ import { Theme } from '../../constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../services/api';
+import { Skeleton } from '../../components/Skeleton';
 
 const CATEGORY_ICONS: Record<string, { name: any; color: string; bg: string }> = {
   Vegetables: { name: 'leaf', color: '#4CAF50', bg: '#E8F5E9' },
@@ -32,21 +34,18 @@ const CATEGORY_ICONS: Record<string, { name: any; color: string; bg: string }> =
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { activeGroupData, loading, fetchDashboard, setActiveGroup } = useGroup();
+  const { activeGroupId, setActiveGroup } = useGroup();
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
-
-  if (loading && !activeGroupData) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading Dashboard...</Text>
-      </View>
-    );
-  }
+  const { data: activeGroupData, isLoading, refetch } = useQuery({
+    queryKey: ['dashboard', activeGroupId],
+    queryFn: async () => {
+      if (!activeGroupId) return null;
+      const res = await api.get(`/groups/${activeGroupId}/dashboard`);
+      return res.data;
+    },
+    enabled: !!activeGroupId,
+  });
 
   const group = activeGroupData?.group;
   const summary = activeGroupData?.summary;
@@ -80,11 +79,19 @@ export default function DashboardScreen() {
       <View style={styles.appBar}>
         <View style={styles.appBarLeft}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{group?.name?.charAt(0)?.toUpperCase() || 'G'}</Text>
+            {isLoading ? (
+              <Skeleton width={44} height={44} borderRadius={22} color="rgba(255,255,255,0.5)" />
+            ) : (
+              <Text style={styles.avatarText}>{group?.name?.charAt(0)?.toUpperCase() || 'G'}</Text>
+            )}
           </View>
           <View>
             <Text style={styles.greetingText}>Welcome to</Text>
-            <Text style={styles.groupName}>{group?.name || 'Your Group'}</Text>
+            {isLoading ? (
+              <Skeleton width={120} height={24} style={{ marginTop: 2 }} />
+            ) : (
+              <Text style={styles.groupName}>{group?.name || 'Your Group'}</Text>
+            )}
           </View>
         </View>
         <TouchableOpacity style={styles.switchIconButton} onPress={() => setActiveGroup(null)}>
@@ -93,7 +100,6 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
         {/* Main Overview Card */}
         <LinearGradient
           colors={[Theme.colors.primary, Theme.colors.primaryDark]}
@@ -105,17 +111,30 @@ export default function DashboardScreen() {
             <Text style={styles.overviewTitle}>Total Group Expenses</Text>
             <TouchableOpacity onPress={handleShareGroupCode} style={styles.shareBadge}>
               <Ionicons name="share-social" size={14} color={Theme.colors.primaryDark} />
-              <Text style={styles.shareBadgeText}>Code: {group?.code}</Text>
+              {isLoading ? (
+                <Skeleton width={60} height={14} color="rgba(0,0,0,0.1)" />
+              ) : (
+                <Text style={styles.shareBadgeText}>Code: {group?.code}</Text>
+              )}
             </TouchableOpacity>
           </View>
-          <Text style={styles.overviewAmount}>{formatCurrency(summary?.totalExpenses || 0)}</Text>
+          
+          {isLoading ? (
+            <Skeleton width={150} height={40} color="rgba(255,255,255,0.3)" style={{ marginVertical: 4 }} />
+          ) : (
+            <Text style={styles.overviewAmount}>{formatCurrency(summary?.totalExpenses || 0)}</Text>
+          )}
 
           <View style={styles.overviewDivider} />
 
           <View style={styles.overviewFooter}>
             <View>
               <Text style={styles.overviewSubTitle}>This Month</Text>
-              <Text style={styles.overviewSubAmount}>{formatCurrency(summary?.thisMonthExpenses || 0)}</Text>
+              {isLoading ? (
+                <Skeleton width={80} height={20} color="rgba(255,255,255,0.3)" style={{ marginTop: 2 }} />
+              ) : (
+                <Text style={styles.overviewSubAmount}>{formatCurrency(summary?.thisMonthExpenses || 0)}</Text>
+              )}
             </View>
             <View style={styles.overviewFooterRight}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -124,12 +143,16 @@ export default function DashboardScreen() {
                   <Ionicons name="help-circle-outline" size={16} color="rgba(255,255,255,0.8)" style={{ marginBottom: 4 }} />
                 </TouchableOpacity>
               </View>
-              <Text style={[
-                styles.overviewSubAmount,
-                balances?.youOwe ? styles.textErrorLight : (balances?.youAreOwed ? styles.textSuccessLight : null)
-              ]}>
-                {balances?.youOwe ? `To Pay ${formatCurrency(balances.youOwe)}` : (balances?.youAreOwed ? `To Receive ${formatCurrency(balances.youAreOwed)}` : 'Settled up 🎉')}
-              </Text>
+              {isLoading ? (
+                <Skeleton width={100} height={20} color="rgba(255,255,255,0.3)" style={{ marginTop: 2 }} />
+              ) : (
+                <Text style={[
+                  styles.overviewSubAmount,
+                  balances?.youOwe ? styles.textErrorLight : (balances?.youAreOwed ? styles.textSuccessLight : null)
+                ]}>
+                  {balances?.youOwe ? `To Pay ${formatCurrency(balances.youOwe)}` : (balances?.youAreOwed ? `To Receive ${formatCurrency(balances.youAreOwed)}` : 'Settled up 🎉')}
+                </Text>
+              )}
             </View>
           </View>
         </LinearGradient>
@@ -169,12 +192,30 @@ export default function DashboardScreen() {
         <View style={styles.expensesSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={fetchDashboard} style={styles.refreshBtn}>
+            <TouchableOpacity onPress={() => refetch()} style={styles.refreshBtn}>
               <Ionicons name="refresh" size={20} color={Theme.colors.primary} />
             </TouchableOpacity>
           </View>
 
-          {recentExpenses.length === 0 ? (
+          {isLoading ? (
+            <View style={styles.expensesList}>
+              {[1, 2, 3].map((key, index) => (
+                <View key={key} style={[styles.expenseItem, index !== 2 && styles.expenseItemBorder]}>
+                  <View style={styles.expenseLeft}>
+                    <Skeleton width={40} height={40} borderRadius={12} />
+                    <View style={styles.expenseInfo}>
+                      <Skeleton width={100} height={16} style={{ marginBottom: 4 }} />
+                      <Skeleton width={140} height={12} />
+                    </View>
+                  </View>
+                  <View style={styles.expenseRight}>
+                    <Skeleton width={60} height={16} style={{ marginBottom: 4 }} />
+                    <Skeleton width={40} height={12} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : recentExpenses.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyStateIconBadge}>
                 <Ionicons name="receipt-outline" size={32} color={Theme.colors.textSecondary} />
@@ -248,7 +289,7 @@ export default function DashboardScreen() {
               {!balances?.balanceBreakdown || balances.balanceBreakdown.length === 0 ? (
                 <Text style={styles.emptyText}>No activity affecting your balance yet.</Text>
               ) : (
-                balances.balanceBreakdown.map((item, index) => {
+                balances.balanceBreakdown.map((item : any, index : any) => {
                   const isPositive = item.type === 'you_are_owed' || item.type === 'settled_to_you';
                   return (
                     <View key={index} style={styles.breakdownItem}>
@@ -281,17 +322,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: Theme.spacing.sm,
-    color: Theme.colors.textSecondary,
-    ...Theme.typography.labelMd,
   },
   appBar: {
     flexDirection: 'row',
