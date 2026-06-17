@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ export default function SettleUpScreen() {
 
   const [settlementHistory, setSettlementHistory] = useState<SettlementRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,39 +51,37 @@ export default function SettleUpScreen() {
     }
   };
 
-  const handleMarkAsPaid = async (toUserId: string, debtAmount: number) => {
+  const handleMarkAsPaid = (toUserId: string, debtAmount: number) => {
     if (!activeGroupId) return;
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      await api.post('/settlements', {
-        group: activeGroupId,
-        toUser: toUserId,
-        amount: debtAmount,
-      });
-      await refreshActiveGroup();
-      await fetchHistory();
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || 'Failed to submit settlement payment');
-    } finally {
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+      try {
+        await api.post('/settlements', {
+          group: activeGroupId,
+          toUser: toUserId,
+          amount: debtAmount,
+        });
+        await refreshActiveGroup();
+        await fetchHistory();
+      } catch (err: any) {
+        setErrorMsg(err.response?.data?.message || 'Failed to submit settlement payment');
+      }
+    });
   };
 
-  const handleConfirmReceipt = async (settlementId: string) => {
+  const handleConfirmReceipt = (settlementId: string) => {
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      await api.put(`/settlements/${settlementId}/approve`);
-      await refreshActiveGroup();
-      await fetchHistory();
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || 'Failed to confirm receipt');
-    } finally {
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+      try {
+        await api.put(`/settlements/${settlementId}/approve`);
+        await refreshActiveGroup();
+        await fetchHistory();
+      } catch (err: any) {
+        setErrorMsg(err.response?.data?.message || 'Failed to confirm receipt');
+      }
+    });
   };
 
   const formatCurrency = (val: number) => {
@@ -141,7 +139,7 @@ export default function SettleUpScreen() {
                   <TouchableOpacity
                     style={styles.confirmBtn}
                     onPress={() => handleConfirmReceipt(item._id)}
-                    disabled={isSubmitting}
+                    disabled={isPending}
                   >
                     <Text style={styles.confirmBtnText}>Confirm</Text>
                   </TouchableOpacity>
@@ -153,44 +151,52 @@ export default function SettleUpScreen() {
 
         {/* 2. Debts I Owe (Mark as Paid) */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Pay Off Your Debts</Text>
+          <Text style={styles.cardTitle}>To Pay</Text>
           {owesList.length === 0 ? (
             <Text style={styles.emptyText}>🎉 You do not owe anyone in this group.</Text>
           ) : (
             <View style={styles.listContainer}>
-              {owesList.map((item) => (
-                <View key={item.user._id} style={styles.settlementActionRow}>
-                  <View style={styles.rowInfo}>
-                    <Text style={styles.rowTextMain}>
-                      You owe {item.user.name}
-                    </Text>
-                    <Text style={[styles.rowTextAmount, styles.redText]}>
-                      {formatCurrency(item.amount)}
-                    </Text>
+              {owesList.map((item) => {
+                const isPendingLocal = settlementHistory.some(
+                  (s) => s.fromUser?._id === user?._id && s.toUser?._id === item.user._id && s.status === 'pending'
+                );
+
+                return (
+                  <View key={item.user._id} style={styles.settlementActionRow}>
+                    <View style={styles.rowInfo}>
+                      <Text style={styles.rowTextMain}>
+                        To Pay {item.user.name}
+                      </Text>
+                      <Text style={[styles.rowTextAmount, styles.redText]}>
+                        {formatCurrency(item.amount)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.payBtn, isPendingLocal && { backgroundColor: Theme.colors.surfaceContainer }]}
+                      onPress={() => handleMarkAsPaid(item.user._id, item.amount)}
+                      disabled={isPending || isPendingLocal}
+                    >
+                      <Text style={[styles.payBtnText, isPendingLocal && { color: Theme.colors.textSecondary }]}>
+                        {isPendingLocal ? 'Request Sent' : 'Mark Paid'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.payBtn}
-                    onPress={() => handleMarkAsPaid(item.user._id, item.amount)}
-                    disabled={isSubmitting}
-                  >
-                    <Text style={styles.payBtnText}>Mark Paid</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
         </View>
 
         {/* 3. Debts Owed to Me */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Balances Owed to You</Text>
+          <Text style={styles.cardTitle}>To Receive</Text>
           {owedList.length === 0 ? (
             <Text style={styles.emptyText}>Nobody owes you anything currently.</Text>
           ) : (
             <View style={styles.listContainer}>
               {owedList.map((item) => (
                 <View key={item.user._id} style={styles.debtOwedRow}>
-                  <Text style={styles.rowTextMain}>{item.user.name} owes you</Text>
+                  <Text style={styles.rowTextMain}>To Receive from {item.user.name}</Text>
                   <Text style={[styles.rowTextAmount, styles.greenText]}>
                     {formatCurrency(item.amount)}
                   </Text>

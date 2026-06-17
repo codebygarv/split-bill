@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   SafeAreaView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../constants/theme';
@@ -40,7 +39,7 @@ export default function RegisterScreen() {
   const [useCase, setUseCase] = useState('Other');
   
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   // Interactive Focus States
   const [nameFocused, setNameFocused] = useState(false);
@@ -51,25 +50,24 @@ export default function RegisterScreen() {
   // Password Visibility Toggle
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegister = async () => {
+  const handleRegister = () => {
     if (!name || !email || !password) {
       setErrorMsg('Please fill in Name, Email, and Password');
       return;
     }
     
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      const result = await register(name, email, password, phone, useCase);
-      if (result && result.requiresOtp) {
-        router.push({ pathname: '/otp', params: { email: result.email || email } });
+    startTransition(async () => {
+      try {
+        const result = await register(name, email, password, phone, useCase);
+        if (result && result.requiresOtp) {
+          router.push({ pathname: '/otp', params: { email: result.email || email } });
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to create account');
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create account');
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   return (
@@ -79,11 +77,13 @@ export default function RegisterScreen() {
       <View style={[styles.glowBall, styles.glowPurple, { top: 220, left: -120, width: 340, height: 340 }]} />
       <View style={[styles.glowBall, styles.glowOrange, { bottom: -100, right: -80, width: 300, height: 300 }]} />
 
-      <KeyboardAvoidingView
-        behavior={undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           
           {/* Header */}
           <View style={styles.header}>
@@ -253,20 +253,20 @@ export default function RegisterScreen() {
             <TouchableOpacity
               style={styles.shadowButton}
               onPress={handleRegister}
-              disabled={isSubmitting}
+              disabled={isPending}
               activeOpacity={0.9}
             >
               <LinearGradient
                 colors={['#2BA8A2', '#007A75']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                style={[styles.button, isPending && styles.buttonDisabled]}
               >
                 <View style={styles.buttonInner}>
                   <Text style={styles.buttonText}>
-                    {isSubmitting ? 'Creating Account...' : 'Sign Up'}
+                    {isPending ? 'Creating Account...' : 'Sign Up'}
                   </Text>
-                  {!isSubmitting && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
+                  {!isPending && <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -280,8 +280,7 @@ export default function RegisterScreen() {
             </View>
 
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

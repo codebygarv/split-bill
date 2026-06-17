@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useTransition } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../constants/theme';
@@ -27,7 +26,7 @@ export default function OTPScreen() {
   const [otp, setOtp] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   // Hidden input focus tracking
   const [isFocused, setIsFocused] = useState(false);
@@ -48,7 +47,7 @@ export default function OTPScreen() {
     return () => clearInterval(interval);
   }, [timer]);
 
-  const handleVerify = async () => {
+  const handleVerify = () => {
     if (!otp || otp.length < 6) {
       setErrorMsg('Please enter a valid 6-digit code');
       return;
@@ -56,14 +55,14 @@ export default function OTPScreen() {
 
     setErrorMsg(null);
     setSuccessMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      await verifyOtp(email, otp);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Verification failed');
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+      try {
+        await verifyOtp(email, otp);
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Verification failed');
+      }
+    });
   };
 
   const handleResend = async () => {
@@ -93,11 +92,13 @@ export default function OTPScreen() {
       <View style={[styles.glowBall, styles.glowPurple, { top: 220, left: -120, width: 340, height: 340 }]} />
       <View style={[styles.glowBall, styles.glowOrange, { bottom: -100, right: -80, width: 300, height: 300 }]} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
           <View style={styles.header}>
             <View style={styles.logoOuterGlow}>
@@ -170,20 +171,20 @@ export default function OTPScreen() {
             <TouchableOpacity
               style={styles.shadowButton}
               onPress={handleVerify}
-              disabled={isSubmitting}
+              disabled={isPending}
               activeOpacity={0.9}
             >
               <LinearGradient
                 colors={['#2BA8A2', '#007A75']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                style={[styles.button, isPending && styles.buttonDisabled]}
               >
                 <View style={styles.buttonInner}>
                   <Text style={styles.buttonText}>
-                    {isSubmitting ? 'Verifying...' : 'Verify'}
+                    {isPending ? 'Verifying...' : 'Verify'}
                   </Text>
-                  {!isSubmitting && <Ionicons name="shield-checkmark-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
+                  {!isPending && <Ionicons name="shield-checkmark-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -211,8 +212,7 @@ export default function OTPScreen() {
             </View>
 
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

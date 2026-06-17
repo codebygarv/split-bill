@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.splitbill.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#F3F7F5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

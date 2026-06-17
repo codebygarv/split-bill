@@ -25,6 +25,18 @@ const logSettlement = async (req, res) => {
       return res.status(403).json({ message: 'Both users must be members of the group' });
     }
 
+    // Check if there is already a pending settlement between these two users
+    const existingPending = await Settlement.findOne({
+      group: groupId,
+      fromUser,
+      toUser,
+      status: 'pending'
+    });
+
+    if (existingPending) {
+      return res.status(400).json({ message: 'There is already a pending settlement request to this user' });
+    }
+
     const settlement = await Settlement.create({
       group: groupId,
       fromUser,

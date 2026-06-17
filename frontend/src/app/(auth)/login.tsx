@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../constants/theme';
@@ -20,41 +19,40 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [isPending, startTransition] = useTransition();
+
   // Interactive Focus States
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  
+
   // Password Visibility Toggle
   const [showPassword, setShowPassword] = useState(false);
 
   // Remember Me checkbox
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     if (!email || !password) {
       setErrorMsg('Please enter both Email and Password');
       return;
     }
-    
-    setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      const result = await login(email, password);
-      if (result && result.requiresOtp) {
-        router.push({ pathname: '/otp', params: { email: result.email || email } });
+    setErrorMsg(null);
+
+    startTransition(async () => {
+      try {
+        const result = await login(email, password);
+        if (result && result.requiresOtp) {
+          router.push({ pathname: '/otp', params: { email: result.email || email } });
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Login failed');
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Login failed');
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   return (
@@ -64,96 +62,98 @@ export default function LoginScreen() {
       <View style={[styles.glowBall, styles.glowPurple, { top: 220, left: -120, width: 340, height: 340 }]} />
       <View style={[styles.glowBall, styles.glowOrange, { bottom: -100, right: -80, width: 300, height: 300 }]} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoOuterGlow}>
-              <View style={styles.logoShadowWrapper}>
-                <Logo size={60} />
-              </View>
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.logoOuterGlow}>
+            <View style={styles.logoShadowWrapper}>
+              <Logo size={60} />
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Log in to check balances and add group bills</Text>
+          </View>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Log in to check balances and add group bills</Text>
+        </View>
+
+        {/* Glassmorphic Form Card */}
+        <View style={styles.form}>
+          {errorMsg && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={styles.errorIcon} />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email Address</Text>
+            <View style={[
+              styles.inputWrapper,
+              emailFocused && styles.inputWrapperFocused
+            ]}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={emailFocused ? Theme.colors.primary : Theme.colors.textSecondary}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter email address"
+                placeholderTextColor={Theme.colors.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+              />
+            </View>
           </View>
 
-          {/* Glassmorphic Form Card */}
-          <View style={styles.form}>
-            {errorMsg && (
-              <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={styles.errorIcon} />
-                <Text style={styles.errorText}>{errorMsg}</Text>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
-              <View style={[
-                styles.inputWrapper, 
-                emailFocused && styles.inputWrapperFocused
-              ]}>
-                <Ionicons 
-                  name="mail-outline" 
-                  size={20} 
-                  color={emailFocused ? Theme.colors.primary : Theme.colors.textSecondary} 
-                  style={styles.inputIcon} 
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={[
+              styles.inputWrapper,
+              passwordFocused && styles.inputWrapperFocused
+            ]}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={passwordFocused ? Theme.colors.primary : Theme.colors.textSecondary}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter password"
+                placeholderTextColor={Theme.colors.textSecondary}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={Theme.colors.textSecondary}
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter email address"
-                  placeholderTextColor={Theme.colors.textSecondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                  onFocus={() => setEmailFocused(true)}
-                  onBlur={() => setEmailFocused(false)}
-                />
-              </View>
+              </TouchableOpacity>
             </View>
+          </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={[
-                styles.inputWrapper, 
-                passwordFocused && styles.inputWrapperFocused
-              ]}>
-                <Ionicons 
-                  name="lock-closed-outline" 
-                  size={20} 
-                  color={passwordFocused ? Theme.colors.primary : Theme.colors.textSecondary} 
-                  style={styles.inputIcon} 
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter password"
-                  placeholderTextColor={Theme.colors.textSecondary}
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
-                />
-                <TouchableOpacity 
-                  onPress={() => setShowPassword(!showPassword)} 
-                  style={styles.eyeButton}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons 
-                    name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={Theme.colors.textSecondary} 
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Remember Me & Forgot Password Row */}
-            {/* <View style={styles.rememberRow}>
+          {/* Remember Me & Forgot Password Row */}
+          {/* <View style={styles.rememberRow}>
               <TouchableOpacity 
                 style={styles.checkboxContainer} 
                 onPress={() => setRememberMe(!rememberMe)}
@@ -170,39 +170,38 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View> */}
 
-            {/* Actions */}
-            <TouchableOpacity
-              style={styles.shadowButton}
-              onPress={handleLogin}
-              disabled={isSubmitting}
-              activeOpacity={0.9}
+          {/* Actions */}
+          <TouchableOpacity
+            style={styles.shadowButton}
+            onPress={handleLogin}
+            disabled={isPending}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#2BA8A2', '#007A75']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.button, isPending && styles.buttonDisabled]}
             >
-              <LinearGradient
-                colors={['#2BA8A2', '#007A75']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.button, isSubmitting && styles.buttonDisabled]}
-              >
-                <View style={styles.buttonInner}>
-                  <Text style={styles.buttonText}>
-                    {isSubmitting ? 'Logging In...' : 'Log In'}
-                  </Text>
-                  {!isSubmitting && <Ionicons name="log-in-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
-                </View>
-              </LinearGradient>
+              <View style={styles.buttonInner}>
+                <Text style={styles.buttonText}>
+                  {isPending ? 'Logging In...' : 'Log In'}
+                </Text>
+                {!isPending && <Ionicons name="log-in-outline" size={18} color="#FFF" style={{ marginLeft: 6 }} />}
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+
+          <View style={styles.registerLinkContainer}>
+            <Text style={styles.registerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
+              <Text style={styles.registerLink}>Sign Up</Text>
             </TouchableOpacity>
-
-
-            <View style={styles.registerLinkContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
-                <Text style={styles.registerLink}>Sign Up</Text>
-              </TouchableOpacity>
-            </View>
-
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+        </View>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

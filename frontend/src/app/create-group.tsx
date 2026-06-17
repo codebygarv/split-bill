@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { useGroup } from '../context/GroupContext';
 import { Theme } from '../constants/theme';
@@ -23,33 +22,35 @@ export default function CreateGroupScreen() {
   const [name, setName] = useState('');
   const [type, setType] = useState('Custom');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!name.trim()) {
       setErrorMsg('Please enter a group name');
       return;
     }
 
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      await createGroup(name, type);
-      // Group context will trigger redirect because activeGroupId changes
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create group');
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+      try {
+        await createGroup(name, type);
+        // Group context will trigger redirect because activeGroupId changes
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to create group');
+      }
+    });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           
           {/* Header */}
           <View style={styles.header}>
@@ -110,19 +111,18 @@ export default function CreateGroupScreen() {
 
             {/* Actions */}
             <TouchableOpacity
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              style={[styles.button, isPending && styles.buttonDisabled]}
               onPress={handleCreate}
-              disabled={isSubmitting}
+              disabled={isPending}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonText}>
-                {isSubmitting ? 'Creating Group...' : 'Create Group'}
+                {isPending ? 'Creating Group...' : 'Create Group'}
               </Text>
             </TouchableOpacity>
 
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

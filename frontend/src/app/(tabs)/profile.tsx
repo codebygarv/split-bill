@@ -6,10 +6,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   StatusBar
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
@@ -294,14 +294,16 @@ export default function ProfileScreen() {
         <View style={styles.iconBtn} />
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={{ flexGrow: 1 }}
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
         {activeView === 'menu' && renderMenu()}
         {activeView === 'personal' && renderPersonal()}
         {activeView === 'security' && renderSecurity()}
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

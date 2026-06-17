@@ -289,6 +289,59 @@ const getGroupDashboard = async (req, res) => {
       }
     });
 
+    // Generate balance breakdown for active user
+    const balanceBreakdown = [];
+    expenses.forEach(exp => {
+      const payerId = exp.paidBy._id.toString();
+      exp.splitBetween.forEach(split => {
+        const debtorId = split.user.toString();
+        if (debtorId !== payerId) {
+           if (payerId === userId) {
+              const debtor = group.members.find(m => m._id.toString() === debtorId);
+              balanceBreakdown.push({
+                 type: 'you_are_owed',
+                 amount: split.amount,
+                 date: exp.date,
+                 message: `${debtor?.name} owes you ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
+              });
+           } else if (debtorId === userId) {
+              const payer = group.members.find(m => m._id.toString() === payerId);
+              balanceBreakdown.push({
+                 type: 'you_owe',
+                 amount: split.amount,
+                 date: exp.date,
+                 message: `You owe ${payer?.name || exp.paidBy.name} ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
+              });
+           }
+        }
+      });
+    });
+
+    settlements.forEach(sett => {
+       const fromId = sett.fromUser.toString();
+       const toId = sett.toUser.toString();
+       if (fromId === userId) {
+          const toUser = group.members.find(m => m._id.toString() === toId);
+          balanceBreakdown.push({
+             type: 'settled_by_you',
+             amount: sett.amount,
+             date: sett.date,
+             message: `You paid ${toUser?.name} ₹${sett.amount}`
+          });
+       } else if (toId === userId) {
+          const fromUser = group.members.find(m => m._id.toString() === fromId);
+          balanceBreakdown.push({
+             type: 'settled_to_you',
+             amount: sett.amount,
+             date: sett.date,
+             message: `${fromUser?.name} paid you ₹${sett.amount}`
+          });
+       }
+    });
+
+    // sort breakdown by date (newest first)
+    balanceBreakdown.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     // 5. Get recent expenses (limit 10)
     const recentExpenses = await Expense.find({ group: groupId })
       .sort({ date: -1 })
@@ -314,6 +367,7 @@ const getGroupDashboard = async (req, res) => {
         youAreOwed: Math.round(youAreOwed * 100) / 100,
         owesList,
         owedList,
+        balanceBreakdown,
       },
       recentExpenses,
     });

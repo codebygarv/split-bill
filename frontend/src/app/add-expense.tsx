@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  ScrollView,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { useGroup } from '../context/GroupContext';
 import { useAuth } from '../context/AuthContext';
@@ -51,15 +51,15 @@ export default function AddExpenseScreen() {
   const [notes, setNotes] = useState('');
   const [paidBy, setPaidBy] = useState(user?._id || '');
   const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
-  
+
   // List of member IDs selected for equal split
   const [splitMembers, setSplitMembers] = useState<string[]>([]);
-  
+
   // Custom split amounts: key is userId, value is amount string
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   // Focus States
   const [amountFocused, setAmountFocused] = useState(false);
@@ -79,7 +79,7 @@ export default function AddExpenseScreen() {
       // Pre-select all members for splitting
       const memberIds = res.data.members.map((m: Member) => m._id);
       setSplitMembers(memberIds);
-      
+
       // Initialize custom splits state with empty strings
       const initialCustom: Record<string, string> = {};
       memberIds.forEach((id: string) => {
@@ -111,7 +111,7 @@ export default function AddExpenseScreen() {
     });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       setErrorMsg('Please enter a valid expense amount');
@@ -119,48 +119,48 @@ export default function AddExpenseScreen() {
     }
 
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      const payload: any = {
-        group: activeGroupId,
-        amount: numericAmount,
-        category,
-        notes,
-        paidBy,
-        splitType,
-      };
+    startTransition(async () => {
+      try {
+        const payload: any = {
+          group: activeGroupId,
+          amount: numericAmount,
+          category,
+          notes,
+          paidBy,
+          splitType,
+        };
 
-      if (splitType === 'equal') {
-        payload.splitMembers = splitMembers;
-      } else {
-        // custom splits
-        const activeSplits = Object.keys(customSplits)
-          .map(userId => ({
-            user: userId,
-            amount: parseFloat(customSplits[userId]) || 0,
-          }))
-          .filter(s => s.amount > 0);
+        if (splitType === 'equal') {
+          payload.splitMembers = splitMembers;
+        } else {
+          // custom splits
+          const activeSplits = Object.keys(customSplits)
+            .map(userId => ({
+              user: userId,
+              amount: parseFloat(customSplits[userId]) || 0,
+            }))
+            .filter(s => s.amount > 0);
 
-        if (activeSplits.length === 0) {
-          throw new Error('Please allocate splits for at least one member');
+          if (activeSplits.length === 0) {
+            throw new Error('Please allocate splits for at least one member');
+          }
+
+          const sum = activeSplits.reduce((acc, s) => acc + s.amount, 0);
+          if (Math.abs(sum - numericAmount) > 0.05) {
+            throw new Error(`Total split sum (${sum.toFixed(2)}) must equal the expense amount (${numericAmount.toFixed(2)})`);
+          }
+
+          payload.customSplits = activeSplits;
         }
 
-        const sum = activeSplits.reduce((acc, s) => acc + s.amount, 0);
-        if (Math.abs(sum - numericAmount) > 0.05) {
-          throw new Error(`Total split sum (${sum.toFixed(2)}) must equal the expense amount (${numericAmount.toFixed(2)})`);
-        }
-
-        payload.customSplits = activeSplits;
+        await api.post('/expenses', payload);
+        await refreshActiveGroup();
+        router.back();
+      } catch (err: any) {
+        setErrorMsg(err.message || err.response?.data?.message || 'Failed to add expense');
       }
-
-      await api.post('/expenses', payload);
-      await refreshActiveGroup();
-      router.back();
-    } catch (err: any) {
-      setErrorMsg(err.message || err.response?.data?.message || 'Failed to add expense');
-      setIsSubmitting(false);
-    }
+    });
   };
 
   if (loadingMembers) {
@@ -182,9 +182,13 @@ export default function AddExpenseScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="always"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid={true}
+        extraScrollHeight={220}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -193,9 +197,9 @@ export default function AddExpenseScreen() {
             <Text style={styles.headerBackText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add Expense</Text>
-          <TouchableOpacity 
-            onPress={handleSubmit} 
-            disabled={isSubmitting} 
+          <TouchableOpacity
+            onPress={handleSubmit}
+            disabled={isPending}
             style={styles.headerSaveButtonWrapper}
             activeOpacity={0.8}
           >
@@ -203,275 +207,274 @@ export default function AddExpenseScreen() {
               colors={['#2BA8A2', '#007A75']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.headerSaveButton, isSubmitting && styles.saveButtonDisabled]}
+              style={[styles.headerSaveButton, isPending && styles.saveButtonDisabled]}
             >
               <Text style={styles.headerSaveText}>
-                {isSubmitting ? 'Saving...' : 'Save'}
+                {isPending ? 'Saving...' : 'Save'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {errorMsg && (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={{ marginRight: 6 }} />
-              <Text style={styles.errorText}>{errorMsg}</Text>
-            </View>
-          )}
 
-          {/* Amount input */}
-          <LinearGradient
-            colors={amountFocused ? ['#FFFFFF', '#E6F4F2'] : ['#FFFFFF', '#F9FAFB']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.amountCard, amountFocused && styles.amountCardFocused]}
-          >
-            <Text style={styles.cardLabel}>AMOUNT</Text>
-            <View style={styles.amountInputRow}>
-              <Text style={styles.currencySymbol}>₹</Text>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0"
-                placeholderTextColor="rgba(13, 44, 42, 0.3)"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-                onFocus={() => setAmountFocused(true)}
-                onBlur={() => setAmountFocused(false)}
-                selectionColor={Theme.colors.primary}
-              />
-            </View>
-          </LinearGradient>
+        {errorMsg && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={20} color={Theme.colors.error} style={{ marginRight: 6 }} />
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        )}
 
-          {/* Category selection */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>CATEGORY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
-              {CATEGORIES.map((cat) => {
-                const isSelected = category === cat.name;
-                return (
-                  <TouchableOpacity
-                    key={cat.name}
-                    style={styles.categoryBtnWrapper}
-                    onPress={() => setCategory(cat.name)}
-                    activeOpacity={0.8}
-                  >
-                    {isSelected ? (
+        {/* Amount input */}
+        <LinearGradient
+          colors={amountFocused ? ['#FFFFFF', '#E6F4F2'] : ['#FFFFFF', '#F9FAFB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.amountCard, amountFocused && styles.amountCardFocused]}
+        >
+          <Text style={styles.cardLabel}>AMOUNT</Text>
+          <View style={styles.amountInputRow}>
+            <Text style={styles.currencySymbol}>₹</Text>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0"
+              placeholderTextColor="rgba(13, 44, 42, 0.3)"
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+              onFocus={() => setAmountFocused(true)}
+              onBlur={() => setAmountFocused(false)}
+              selectionColor={Theme.colors.primary}
+            />
+          </View>
+        </LinearGradient>
+
+        {/* Category selection */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>CATEGORY</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+            {CATEGORIES.map((cat) => {
+              const isSelected = category === cat.name;
+              return (
+                <TouchableOpacity
+                  key={cat.name}
+                  style={styles.categoryBtnWrapper}
+                  onPress={() => setCategory(cat.name)}
+                  activeOpacity={0.8}
+                >
+                  {isSelected ? (
+                    <LinearGradient
+                      colors={['#2BA8A2', '#007A75']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.categoryBtnSelected}
+                    >
+                      <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                      <Text style={styles.categoryBtnTextSelected}>{cat.name}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.categoryBtnUnselected}>
+                      <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                      <Text style={styles.categoryBtnText}>{cat.name}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Paid By section */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>PAID BY</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerScroll}>
+            {members.map((member) => {
+              const isSelected = paidBy === member._id;
+              const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+              return (
+                <TouchableOpacity
+                  key={member._id}
+                  style={styles.payerCard}
+                  onPress={() => setPaidBy(member._id)}
+                  activeOpacity={0.8}
+                >
+                  {isSelected ? (
+                    <View style={styles.payerAvatarOuterRing}>
                       <LinearGradient
-                        colors={['#2BA8A2', '#007A75']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.categoryBtnSelected}
+                        colors={['#2BA8A2', '#006A66']}
+                        style={styles.payerAvatarSelected}
                       >
-                        <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                        <Text style={styles.categoryBtnTextSelected}>{cat.name}</Text>
+                        <Text style={styles.payerAvatarTextSelected}>{initials}</Text>
                       </LinearGradient>
-                    ) : (
-                      <View style={styles.categoryBtnUnselected}>
-                        <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                        <Text style={styles.categoryBtnText}>{cat.name}</Text>
+                      <View style={styles.avatarCheckBadge}>
+                        <Ionicons name="checkmark" size={9} color="#FFFFFF" />
                       </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                    </View>
+                  ) : (
+                    <View style={styles.payerAvatarUnselected}>
+                      <Text style={styles.payerAvatarText}>{initials}</Text>
+                    </View>
+                  )}
+                  <Text
+                    style={[
+                      styles.payerNameText,
+                      isSelected && styles.payerNameTextSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {member.name === user?.name ? 'You' : member.name.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Split Options section */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>SPLIT OPTIONS</Text>
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, splitType === 'equal' && styles.toggleBtnActive]}
+              onPress={() => setSplitType('equal')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.toggleText, splitType === 'equal' && styles.toggleTextActive]}>
+                Equally
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, splitType === 'custom' && styles.toggleBtnActive]}
+              onPress={() => setSplitType('custom')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.toggleText, splitType === 'custom' && styles.toggleTextActive]}>
+                Custom Amounts
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Paid By section */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>PAID BY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.payerScroll}>
-              {members.map((member) => {
-                const isSelected = paidBy === member._id;
-                const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+          {/* Split Details list */}
+          <View style={styles.splitList}>
+            {members.map((member) => {
+              const isSelected = splitMembers.includes(member._id);
+              const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+              if (splitType === 'equal') {
+                const share = isSelected ? (numericAmount / splitMembers.length) : 0;
                 return (
                   <TouchableOpacity
                     key={member._id}
-                    style={styles.payerCard}
-                    onPress={() => setPaidBy(member._id)}
-                    activeOpacity={0.8}
+                    style={styles.splitRow}
+                    onPress={() => handleToggleMember(member._id)}
+                    activeOpacity={0.7}
                   >
-                    {isSelected ? (
-                      <View style={styles.payerAvatarOuterRing}>
-                        <LinearGradient
-                          colors={['#2BA8A2', '#006A66']}
-                          style={styles.payerAvatarSelected}
-                        >
-                          <Text style={styles.payerAvatarTextSelected}>{initials}</Text>
-                        </LinearGradient>
-                        <View style={styles.avatarCheckBadge}>
-                          <Ionicons name="checkmark" size={9} color="#FFFFFF" />
-                        </View>
+                    <View style={styles.checkboxContainer}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                        {isSelected && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
                       </View>
-                    ) : (
-                      <View style={styles.payerAvatarUnselected}>
-                        <Text style={styles.payerAvatarText}>{initials}</Text>
+                      <View style={styles.memberMiniAvatar}>
+                        <Text style={styles.memberMiniAvatarText}>{initials}</Text>
                       </View>
-                    )}
-                    <Text 
-                      style={[
-                        styles.payerNameText,
-                        isSelected && styles.payerNameTextSelected,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {member.name === user?.name ? 'You' : member.name.split(' ')[0]}
+                      <Text style={styles.splitName}>
+                        {member.name === user?.name ? 'You' : member.name}
+                      </Text>
+                    </View>
+                    <Text style={[styles.splitShareText, isSelected && styles.splitShareTextActive]}>
+                      {share > 0 ? `₹${share.toFixed(2)}` : 'Excluded'}
                     </Text>
                   </TouchableOpacity>
                 );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* Split Options section */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>SPLIT OPTIONS</Text>
-            <View style={styles.toggleContainer}>
-              <TouchableOpacity
-                style={[styles.toggleBtn, splitType === 'equal' && styles.toggleBtnActive]}
-                onPress={() => setSplitType('equal')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleText, splitType === 'equal' && styles.toggleTextActive]}>
-                  Equally
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, splitType === 'custom' && styles.toggleBtnActive]}
-                onPress={() => setSplitType('custom')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleText, splitType === 'custom' && styles.toggleTextActive]}>
-                  Custom Amounts
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Split Details list */}
-            <View style={styles.splitList}>
-              {members.map((member) => {
-                const isSelected = splitMembers.includes(member._id);
-                const initials = member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                
-                if (splitType === 'equal') {
-                  const share = isSelected ? (numericAmount / splitMembers.length) : 0;
-                  return (
-                    <TouchableOpacity
-                      key={member._id}
-                      style={styles.splitRow}
-                      onPress={() => handleToggleMember(member._id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.checkboxContainer}>
-                        <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                          {isSelected && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
-                        </View>
-                        <View style={styles.memberMiniAvatar}>
-                          <Text style={styles.memberMiniAvatarText}>{initials}</Text>
-                        </View>
-                        <Text style={styles.splitName}>
-                          {member.name === user?.name ? 'You' : member.name}
-                        </Text>
+              } else {
+                // custom split input
+                return (
+                  <View key={member._id} style={styles.splitRowCustom}>
+                    <View style={styles.memberInfoRow}>
+                      <View style={styles.memberMiniAvatar}>
+                        <Text style={styles.memberMiniAvatarText}>{initials}</Text>
                       </View>
-                      <Text style={[styles.splitShareText, isSelected && styles.splitShareTextActive]}>
-                        {share > 0 ? `₹${share.toFixed(2)}` : 'Excluded'}
+                      <Text style={styles.splitName}>
+                        {member.name === user?.name ? 'You' : member.name}
                       </Text>
-                    </TouchableOpacity>
-                  );
-                } else {
-                  // custom split input
-                  return (
-                    <View key={member._id} style={styles.splitRowCustom}>
-                      <View style={styles.memberInfoRow}>
-                        <View style={styles.memberMiniAvatar}>
-                          <Text style={styles.memberMiniAvatarText}>{initials}</Text>
-                        </View>
-                        <Text style={styles.splitName}>
-                          {member.name === user?.name ? 'You' : member.name}
-                        </Text>
-                      </View>
-                      <View style={[
-                        styles.customInputWrapper,
-                        focusedCustomInput === member._id && styles.customInputWrapperFocused
-                      ]}>
-                        <Text style={styles.currencyPrefix}>₹</Text>
-                        <TextInput
-                          style={styles.customSplitInput}
-                          placeholder="0.00"
-                          placeholderTextColor="rgba(13, 44, 42, 0.3)"
-                          keyboardType="numeric"
-                          value={customSplits[member._id] || ''}
-                          onChangeText={(val) => handleCustomSplitChange(member._id, val)}
-                          onFocus={() => setFocusedCustomInput(member._id)}
-                          onBlur={() => setFocusedCustomInput(null)}
-                          selectionColor={Theme.colors.primary}
-                        />
-                      </View>
                     </View>
-                  );
-                }
-              })}
-            </View>
-
-            {/* Custom split real-time validation status banner */}
-            {splitType === 'custom' && numericAmount > 0 && (
-              <View style={[
-                styles.splitStatusBanner,
-                Math.abs(remainingAmount) < 0.05 ? styles.splitStatusBannerSuccess : 
-                remainingAmount > 0 ? styles.splitStatusBannerWarning : styles.splitStatusBannerError
-              ]}>
-                <Ionicons 
-                  name={Math.abs(remainingAmount) < 0.05 ? "checkmark-circle" : "alert-circle"} 
-                  size={16} 
-                  color={
-                    Math.abs(remainingAmount) < 0.05 ? Theme.colors.success : 
-                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
-                  } 
-                />
-                <Text style={[
-                  styles.splitStatusText,
-                  {
-                    color: Math.abs(remainingAmount) < 0.05 ? Theme.colors.success : 
-                           remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
-                  }
-                ]}>
-                  {Math.abs(remainingAmount) < 0.05 ? 'Total amount split perfectly!' :
-                   remainingAmount > 0 ? `Remaining to allocate: ₹${remainingAmount.toFixed(2)}` :
-                   `Over split by: ₹${Math.abs(remainingAmount).toFixed(2)}`}
-                </Text>
-              </View>
-            )}
+                    <View style={[
+                      styles.customInputWrapper,
+                      focusedCustomInput === member._id && styles.customInputWrapperFocused
+                    ]}>
+                      <Text style={styles.currencyPrefix}>₹</Text>
+                      <TextInput
+                        style={styles.customSplitInput}
+                        placeholder="0.00"
+                        placeholderTextColor="rgba(13, 44, 42, 0.3)"
+                        keyboardType="numeric"
+                        value={customSplits[member._id] || ''}
+                        onChangeText={(val) => handleCustomSplitChange(member._id, val)}
+                        onFocus={() => setFocusedCustomInput(member._id)}
+                        onBlur={() => setFocusedCustomInput(null)}
+                        selectionColor={Theme.colors.primary}
+                      />
+                    </View>
+                  </View>
+                );
+              }
+            })}
           </View>
 
-          {/* Notes description */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>DESCRIPTION / NOTES (OPTIONAL)</Text>
+          {/* Custom split real-time validation status banner */}
+          {splitType === 'custom' && numericAmount > 0 && (
             <View style={[
-              styles.notesInputWrapper,
-              notesFocused && styles.notesInputWrapperFocused
+              styles.splitStatusBanner,
+              Math.abs(remainingAmount) < 0.05 ? styles.splitStatusBannerSuccess :
+                remainingAmount > 0 ? styles.splitStatusBannerWarning : styles.splitStatusBannerError
             ]}>
-              <Ionicons 
-                name="document-text-outline" 
-                size={20} 
-                color={notesFocused ? Theme.colors.primary : Theme.colors.textSecondary} 
-                style={styles.notesIcon} 
+              <Ionicons
+                name={Math.abs(remainingAmount) < 0.05 ? "checkmark-circle" : "alert-circle"}
+                size={16}
+                color={
+                  Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
+                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                }
               />
-              <TextInput
-                style={styles.notesInput}
-                placeholder="What was this expense for?"
-                placeholderTextColor={Theme.colors.textSecondary}
-                value={notes}
-                onChangeText={setNotes}
-                onFocus={() => setNotesFocused(true)}
-                onBlur={() => setNotesFocused(false)}
-              />
+              <Text style={[
+                styles.splitStatusText,
+                {
+                  color: Math.abs(remainingAmount) < 0.05 ? Theme.colors.success :
+                    remainingAmount > 0 ? Theme.colors.warning : Theme.colors.error
+                }
+              ]}>
+                {Math.abs(remainingAmount) < 0.05 ? 'Total amount split perfectly!' :
+                  remainingAmount > 0 ? `Remaining to allocate: ₹${remainingAmount.toFixed(2)}` :
+                    `Over split by: ₹${Math.abs(remainingAmount).toFixed(2)}`}
+              </Text>
             </View>
-          </View>
+          )}
+        </View>
 
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {/* Notes description */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>DESCRIPTION / NOTES (OPTIONAL)</Text>
+          <View style={[
+            styles.notesInputWrapper,
+            notesFocused && styles.notesInputWrapperFocused
+          ]}>
+            <Ionicons
+              name="document-text-outline"
+              size={20}
+              color={notesFocused ? Theme.colors.primary : Theme.colors.textSecondary}
+              style={styles.notesIcon}
+            />
+            <TextInput
+              style={styles.notesInput}
+              placeholder="What was this expense for?"
+              placeholderTextColor={Theme.colors.textSecondary}
+              value={notes}
+              onChangeText={setNotes}
+              onFocus={() => setNotesFocused(true)}
+              onBlur={() => setNotesFocused(false)}
+            />
+          </View>
+        </View>
+
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -871,6 +874,7 @@ const styles = StyleSheet.create({
   },
   customSplitInput: {
     flex: 1,
+    height: '100%',
     color: '#0D2C2A',
     fontWeight: '700',
     fontSize: 13,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter } from 'expo-router';
 import { useGroup } from '../context/GroupContext';
 import { Theme } from '../constants/theme';
@@ -20,9 +19,9 @@ export default function JoinGroupScreen() {
 
   const [code, setCode] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     if (!code.trim()) {
       setErrorMsg('Please enter a group code');
       return;
@@ -34,24 +33,26 @@ export default function JoinGroupScreen() {
     }
 
     setErrorMsg(null);
-    setIsSubmitting(true);
 
-    try {
-      await joinGroup(code);
-      // Group context will trigger redirect because activeGroupId changes
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to join group');
-      setIsSubmitting(false);
-    }
+    startTransition(async () => {
+      try {
+        await joinGroup(code);
+        // Group context will trigger redirect because activeGroupId changes
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to join group');
+      }
+    });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
         style={styles.keyboardView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={120}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           
           {/* Header */}
           <View style={styles.header}>
@@ -85,19 +86,18 @@ export default function JoinGroupScreen() {
 
             {/* Actions */}
             <TouchableOpacity
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              style={[styles.button, isPending && styles.buttonDisabled]}
               onPress={handleJoin}
-              disabled={isSubmitting}
+              disabled={isPending}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonText}>
-                {isSubmitting ? 'Joining Group...' : 'Join Group'}
+                {isPending ? 'Joining Group...' : 'Join Group'}
               </Text>
             </TouchableOpacity>
 
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

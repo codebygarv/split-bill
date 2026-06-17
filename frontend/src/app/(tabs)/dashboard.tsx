@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Share,
   Platform,
-  StatusBar
+  StatusBar,
+  Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useGroup } from '../../context/GroupContext';
@@ -32,6 +33,7 @@ const CATEGORY_ICONS: Record<string, { name: any; color: string; bg: string }> =
 export default function DashboardScreen() {
   const router = useRouter();
   const { activeGroupData, loading, fetchDashboard, setActiveGroup } = useGroup();
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -116,12 +118,17 @@ export default function DashboardScreen() {
               <Text style={styles.overviewSubAmount}>{formatCurrency(summary?.thisMonthExpenses || 0)}</Text>
             </View>
             <View style={styles.overviewFooterRight}>
-              <Text style={styles.overviewSubTitle}>Your Balance</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={styles.overviewSubTitle}>Your Balance</Text>
+                <TouchableOpacity onPress={() => setShowBreakdownModal(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="help-circle-outline" size={16} color="rgba(255,255,255,0.8)" style={{ marginBottom: 4 }} />
+                </TouchableOpacity>
+              </View>
               <Text style={[
                 styles.overviewSubAmount,
                 balances?.youOwe ? styles.textErrorLight : (balances?.youAreOwed ? styles.textSuccessLight : null)
               ]}>
-                {balances?.youOwe ? `You owe ${formatCurrency(balances.youOwe)}` : (balances?.youAreOwed ? `Owed to you ${formatCurrency(balances.youAreOwed)}` : 'Settled up 🎉')}
+                {balances?.youOwe ? `To Pay ${formatCurrency(balances.youOwe)}` : (balances?.youAreOwed ? `To Receive ${formatCurrency(balances.youAreOwed)}` : 'Settled up 🎉')}
               </Text>
             </View>
           </View>
@@ -221,6 +228,51 @@ export default function DashboardScreen() {
           <Ionicons name="add" size={32} color="#FFF" />
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Breakdown Modal */}
+      <Modal
+        visible={showBreakdownModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBreakdownModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Balance Calculation</Text>
+              <TouchableOpacity onPress={() => setShowBreakdownModal(false)}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {!balances?.balanceBreakdown || balances.balanceBreakdown.length === 0 ? (
+                <Text style={styles.emptyText}>No activity affecting your balance yet.</Text>
+              ) : (
+                balances.balanceBreakdown.map((item, index) => {
+                  const isPositive = item.type === 'you_are_owed' || item.type === 'settled_to_you';
+                  return (
+                    <View key={index} style={styles.breakdownItem}>
+                      <View style={[styles.breakdownIconBg, { backgroundColor: isPositive ? '#E8F5E9' : '#FFEBEE' }]}>
+                        <Ionicons 
+                          name={item.type.includes('settled') ? "cash-outline" : "swap-horizontal"} 
+                          size={18} 
+                          color={isPositive ? Theme.colors.success : Theme.colors.error} 
+                        />
+                      </View>
+                      <View style={styles.breakdownInfo}>
+                        <Text style={styles.breakdownMessage}>{item.message}</Text>
+                        <Text style={styles.breakdownDate}>
+                          {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -504,5 +556,58 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Theme.colors.surface,
+    borderTopLeftRadius: Theme.rounded.xl,
+    borderTopRightRadius: Theme.rounded.xl,
+    padding: Theme.spacing.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.md,
+  },
+  modalTitle: {
+    ...Theme.typography.headlineMd,
+    color: Theme.colors.text,
+  },
+  modalScroll: {
+    paddingBottom: Theme.spacing.xl,
+  },
+  breakdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.border,
+  },
+  breakdownIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Theme.spacing.md,
+  },
+  breakdownInfo: {
+    flex: 1,
+  },
+  breakdownMessage: {
+    ...Theme.typography.labelMd,
+    color: Theme.colors.text,
+    lineHeight: 20,
+  },
+  breakdownDate: {
+    ...Theme.typography.labelSm,
+    color: Theme.colors.textSecondary,
+    marginTop: 4,
   },
 });

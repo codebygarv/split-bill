@@ -23,6 +23,12 @@ interface GroupBalances {
   youAreOwed: number;
   owesList: MemberBalance[];
   owedList: MemberBalance[];
+  balanceBreakdown: Array<{
+    type: 'you_are_owed' | 'you_owe' | 'settled_by_you' | 'settled_to_you';
+    amount: number;
+    date: string;
+    message: string;
+  }>;
 }
 
 interface Expense {
