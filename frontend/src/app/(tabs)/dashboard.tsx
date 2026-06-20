@@ -82,6 +82,59 @@ export default function DashboardScreen() {
     router.push({ pathname: '/add-expense', params: { id: selectedExpenseId } });
   };
 
+  const getNaturalSummary = () => {
+    if (!balances) return '';
+    const { balanceBreakdown = [], owesList = [], owedList = [] } = balances;
+    
+    if (balanceBreakdown.length === 0) {
+      return "There are no transactions in this group yet. You're completely settled up!";
+    }
+
+    if (owesList.length === 0 && owedList.length === 0) {
+      return "All group expenses and payments have cancelled out perfectly! You are completely settled.";
+    }
+
+    const transactions = balanceBreakdown
+      .filter((item: any) => !item.type.includes('settled'))
+      .slice(0, 3);
+
+    let narrative = "";
+    if (transactions.length > 0) {
+      const descriptions = transactions.map((item: any) => {
+        const msg = item.message;
+        if (item.type === 'you_are_owed') {
+          const match = msg.match(/(.+) owes you ₹([\d,]+) for ([^(]+)/);
+          if (match) {
+            return `${match[1].trim()} added ${match[3].trim()}`;
+          }
+        } else if (item.type === 'you_owe') {
+          const match = msg.match(/You owe (.+) ₹([\d,]+) for ([^(]+)/);
+          if (match) {
+            return `${match[1].trim()} added ${match[3].trim()}`;
+          }
+        }
+        return '';
+      }).filter(Boolean);
+
+      const uniqueDescriptions = Array.from(new Set(descriptions));
+      if (uniqueDescriptions.length > 0) {
+        narrative = `Because ${uniqueDescriptions.slice(0, 2).join(' and ')}, `;
+      }
+    }
+
+    const payReceiveParts = [];
+    if (owesList.length > 0) {
+      const payDetail = owesList.map((o: any) => `₹${o.amount} to ${o.user?.name}`).join(' and ');
+      payReceiveParts.push(`you now have to pay ${payDetail}`);
+    }
+    if (owedList.length > 0) {
+      const receiveDetail = owedList.map((o: any) => `₹${o.amount} from ${o.user?.name}`).join(' and ');
+      payReceiveParts.push(`you need to receive ${receiveDetail}`);
+    }
+
+    return `${narrative}in summary ${payReceiveParts.join(', and ')}.`;
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -316,26 +369,35 @@ export default function DashboardScreen() {
               {!balances?.balanceBreakdown || balances.balanceBreakdown.length === 0 ? (
                 <Text style={styles.emptyText}>No activity affecting your balance yet.</Text>
               ) : (
-                balances.balanceBreakdown.map((item : any, index : any) => {
-                  const isPositive = item.type === 'you_are_owed' || item.type === 'settled_to_you';
-                  return (
-                    <View key={index} style={styles.breakdownItem}>
-                      <View style={[styles.breakdownIconBg, { backgroundColor: isPositive ? '#E8F5E9' : '#FFEBEE' }]}>
-                        <Ionicons 
-                          name={item.type.includes('settled') ? "cash-outline" : "swap-horizontal"} 
-                          size={18} 
-                          color={isPositive ? Theme.colors.success : Theme.colors.error} 
-                        />
+                <View>
+                  {balances.balanceBreakdown.map((item : any, index : any) => {
+                    const isPositive = item.type === 'you_are_owed' || item.type === 'settled_to_you';
+                    return (
+                      <View key={index} style={styles.breakdownItem}>
+                        <View style={[styles.breakdownIconBg, { backgroundColor: isPositive ? '#E8F5E9' : '#FFEBEE' }]}>
+                          <Ionicons 
+                            name={item.type.includes('settled') ? "cash-outline" : "swap-horizontal"} 
+                            size={18} 
+                            color={isPositive ? Theme.colors.success : Theme.colors.error} 
+                          />
+                        </View>
+                        <View style={styles.breakdownInfo}>
+                          <Text style={styles.breakdownMessage}>{item.message}</Text>
+                          <Text style={styles.breakdownDate}>
+                            {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.breakdownInfo}>
-                        <Text style={styles.breakdownMessage}>{item.message}</Text>
-                        <Text style={styles.breakdownDate}>
-                          {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })
+                    );
+                  })}
+                  
+                  {/* Separator and Summary */}
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryHeader}>Net Summary</Text>
+                    <Text style={styles.summaryText}>{getNaturalSummary()}</Text>
+                  </View>
+                </View>
               )}
             </ScrollView>
           </View>
@@ -756,5 +818,27 @@ const styles = StyleSheet.create({
     ...Theme.typography.labelSm,
     color: Theme.colors.textSecondary,
     marginTop: 4,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: Theme.colors.border,
+    marginVertical: Theme.spacing.md,
+  },
+  summaryCard: {
+    backgroundColor: Theme.colors.surfaceContainerLow,
+    padding: Theme.spacing.md,
+    borderRadius: Theme.rounded.md,
+    marginTop: Theme.spacing.xs,
+  },
+  summaryHeader: {
+    ...Theme.typography.labelMd,
+    fontWeight: '700',
+    color: Theme.colors.text,
+    marginBottom: 6,
+  },
+  summaryText: {
+    ...Theme.typography.labelSm,
+    color: Theme.colors.textSecondary,
+    lineHeight: 18,
   },
 });
