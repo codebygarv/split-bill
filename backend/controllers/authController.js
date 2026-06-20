@@ -382,6 +382,56 @@ const removePushToken = async (req, res) => {
   }
 };
 
+// @desc    Send feedback email
+// @route   POST /api/auth/feedback
+// @access  Private
+const sendFeedback = async (req, res) => {
+  try {
+    const { type, description, images = [] } = req.body;
+
+    if (!type || !description) {
+      return res.status(400).json({ message: 'Feedback type and description are required' });
+    }
+
+    if (!transporter) await setupTransporter();
+
+    // Map base64 images into attachments for Nodemailer
+    const attachments = images.map((imgBase64, index) => {
+      if (imgBase64 && imgBase64.startsWith('data:')) {
+        return {
+          filename: `screenshot_${index + 1}.jpg`,
+          path: imgBase64
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
+    const mailOptions = {
+      from: '"SplitBill Feedback" <noreply@splitbill.com>',
+      to: 'Garvthakral90@gmail.com',
+      subject: `[Feedback - ${type}] from ${req.user.name}`,
+      text: `Feedback Type: ${type}\nUser: ${req.user.name} (${req.user.email})\nDescription: ${description}`,
+      html: `
+        <h3>New Feedback Received</h3>
+        <p><strong>Feedback Type:</strong> ${type}</p>
+        <p><strong>User:</strong> ${req.user.name} (${req.user.email})</p>
+        <p><strong>Description:</strong></p>
+        <div style="background-color: #f5f5f5; padding: 12px; border-radius: 6px; font-family: sans-serif; line-height: 1.5; color: #333;">
+          ${description.replace(/\n/g, '<br/>')}
+        </div>
+      `,
+      attachments
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: 'Feedback sent successfully!' });
+  } catch (error) {
+    console.error('Feedback send failed:', error);
+    res.status(500).json({ message: 'Failed to send feedback email' });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -392,4 +442,5 @@ module.exports = {
   changePassword,
   savePushToken,
   removePushToken,
+  sendFeedback,
 };

@@ -8,7 +8,8 @@ import {
   ScrollView,
   Platform,
   StatusBar,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +30,81 @@ export default function ProfileScreen() {
 
   const groups = user?.groups || [];
 
-  const [activeView, setActiveView] = useState<'menu' | 'personal' | 'security' | 'groups'>('menu');
+  const [activeView, setActiveView] = useState<'menu' | 'personal' | 'security' | 'groups' | 'feedback'>('menu');
+
+  // Feedback states
+  const [feedbackType, setFeedbackType] = useState('Bug');
+  const [feedbackDesc, setFeedbackDesc] = useState('');
+  const [feedbackImages, setFeedbackImages] = useState<string[]>([]);
+  const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [showTypePicker, setShowTypePicker] = useState(false);
+
+  const FEEDBACK_TYPES = [
+    'Bug',
+    'Feature Request',
+    'Enhancement',
+    'UI/UX Feedback',
+    'Performance Issue',
+    'Account Issue',
+    'Billing & Payments',
+    'App Crash',
+    'Spam/Abuse Report',
+    'Other'
+  ];
+
+  const pickFeedbackImage = async () => {
+    if (feedbackImages.length >= 2) {
+      Alert.alert('Limit Reached', 'You can attach up to 2 images.');
+      return;
+    }
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need storage permissions to attach an image.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.6,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0].base64) {
+      const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setFeedbackImages(prev => [...prev, base64Uri]);
+    }
+  };
+
+  const removeFeedbackImage = (index: number) => {
+    setFeedbackImages(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSendFeedback = async () => {
+    if (!feedbackDesc.trim()) {
+      Alert.alert('Error', 'Please enter a description for your feedback.');
+      return;
+    }
+
+    setSendingFeedback(true);
+    try {
+      await api.post('/auth/feedback', {
+        type: feedbackType,
+        description: feedbackDesc,
+        images: feedbackImages
+      });
+      Alert.alert('Success', 'Thank you for your feedback! It has been sent to our developer.');
+      setFeedbackDesc('');
+      setFeedbackImages([]);
+      setFeedbackType('Bug');
+      setActiveView('menu');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to send feedback.');
+    } finally {
+      setSendingFeedback(false);
+    }
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -215,7 +290,16 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
 
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveView('feedback')}>
+          <View style={[styles.menuIconBox, { backgroundColor: '#E8F5E9' }]}>
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color={Theme.colors.success} />
+          </View>
+          <Text style={styles.menuItemText}>Send Feedback</Text>
+          <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
+        </TouchableOpacity>
+
         <View style={styles.menuDivider} />
+
         <TouchableOpacity style={styles.menuItem} onPress={logout}>
           <View style={[styles.menuIconBox, { backgroundColor: Theme.colors.errorBg }]}>
             <Ionicons name="log-out-outline" size={20} color={Theme.colors.error} />
@@ -397,6 +481,136 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 
+  const renderFeedback = () => (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Send Feedback</Text>
+        <Text style={styles.feedbackInfo}>Help us improve SplitBill. Report issues or request enhancements below.</Text>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Feedback Type</Text>
+          <TouchableOpacity 
+            style={styles.dropdownSelector}
+            onPress={() => setShowTypePicker(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.dropdownSelectorText}>{feedbackType}</Text>
+            <Ionicons name="chevron-down" size={18} color={Theme.colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={feedbackDesc}
+            onChangeText={setFeedbackDesc}
+            placeholder="Tell us what went wrong or what you'd like to see..."
+            placeholderTextColor={Theme.colors.textSecondary}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, width: '100%' }}>
+            <Text style={styles.label}>Screenshots / Images (Max 2)</Text>
+            <Text style={{ fontSize: 12, color: Theme.colors.textSecondary }}>{feedbackImages.length} / 2</Text>
+          </View>
+
+          <View style={styles.imagePickerRow}>
+            {feedbackImages.map((img, idx) => (
+              <View key={idx} style={styles.imageThumbnailContainer}>
+                <Image source={{ uri: img }} style={styles.feedbackThumbnail} />
+                <TouchableOpacity 
+                  style={styles.deleteThumbnailBtn}
+                  onPress={() => removeFeedbackImage(idx)}
+                >
+                  <Ionicons name="close-circle" size={20} color={Theme.colors.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            {feedbackImages.length < 2 && (
+              <TouchableOpacity 
+                style={styles.addImageBtn}
+                onPress={pickFeedbackImage}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="camera-outline" size={28} color={Theme.colors.primary} />
+                <Text style={styles.addImageBtnText}>Add Image</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleSendFeedback}
+          disabled={sendingFeedback}
+        >
+          <LinearGradient
+            colors={[Theme.colors.primary, Theme.colors.primaryDark]}
+            style={[styles.saveBtnGradient, sendingFeedback && styles.btnDisabled]}
+          >
+            <Text style={styles.btnText}>
+              {sendingFeedback ? 'Sending...' : 'Send Feedback'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      {/* Dropdown Modal Selector */}
+      <Modal
+        visible={showTypePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTypePicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.pickerModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowTypePicker(false)}
+        >
+          <View style={styles.pickerModalContent}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Select Feedback Type</Text>
+              <TouchableOpacity onPress={() => setShowTypePicker(false)}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              {FEEDBACK_TYPES.map((typeOption) => (
+                <TouchableOpacity
+                  key={typeOption}
+                  style={[
+                    styles.pickerOptionItem,
+                    feedbackType === typeOption && styles.pickerOptionItemActive
+                  ]}
+                  onPress={() => {
+                    setFeedbackType(typeOption);
+                    setShowTypePicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.pickerOptionText,
+                    feedbackType === typeOption && styles.pickerOptionTextActive
+                  ]}>
+                    {typeOption}
+                  </Text>
+                  {feedbackType === typeOption && (
+                    <Ionicons name="checkmark" size={20} color={Theme.colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </ScrollView>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -412,7 +626,8 @@ export default function ProfileScreen() {
           {activeView === 'menu' ? 'Your Profile' :
             activeView === 'personal' ? 'Personal Info' :
               activeView === 'groups' ? 'Groups' :
-                'Security'}
+                activeView === 'feedback' ? 'Send Feedback' :
+                  'Security'}
         </Text>
         <View style={styles.iconBtn} />
       </View>
@@ -427,6 +642,7 @@ export default function ProfileScreen() {
         {activeView === 'personal' && renderPersonal()}
         {activeView === 'security' && renderSecurity()}
         {activeView === 'groups' && renderGroups()}
+        {activeView === 'feedback' && renderFeedback()}
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );
@@ -699,6 +915,120 @@ const styles = StyleSheet.create({
   },
   groupArrow: {
     fontSize: 18,
+    color: Theme.colors.primary,
+    fontWeight: '700',
+  },
+  feedbackInfo: {
+    ...Theme.typography.bodyMd,
+    color: Theme.colors.textSecondary,
+    marginBottom: Theme.spacing.md,
+  },
+  dropdownSelector: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: Theme.rounded.md,
+    paddingHorizontal: Theme.spacing.md,
+    color: Theme.colors.text,
+    backgroundColor: '#FAFAFA',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownSelectorText: {
+    ...Theme.typography.bodyMd,
+    color: Theme.colors.text,
+  },
+  textArea: {
+    height: 120,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  imagePickerRow: {
+    flexDirection: 'row',
+    gap: Theme.spacing.md,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  imageThumbnailContainer: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+  },
+  feedbackThumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Theme.rounded.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  deleteThumbnailBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  addImageBtn: {
+    width: 80,
+    height: 80,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: Theme.rounded.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(43, 168, 162, 0.03)',
+  },
+  addImageBtnText: {
+    fontSize: 10,
+    color: Theme.colors.primaryDark,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: Theme.rounded.xl,
+    borderTopRightRadius: Theme.rounded.xl,
+    padding: Theme.spacing.lg,
+    maxHeight: '70%',
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.md,
+  },
+  pickerModalTitle: {
+    ...Theme.typography.headlineMd,
+    fontSize: 18,
+    color: Theme.colors.text,
+  },
+  pickerScroll: {
+    marginBottom: Theme.spacing.lg,
+  },
+  pickerOptionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.border,
+  },
+  pickerOptionItemActive: {
+    borderBottomColor: Theme.colors.primary,
+  },
+  pickerOptionText: {
+    ...Theme.typography.bodyLg,
+    color: Theme.colors.text,
+  },
+  pickerOptionTextActive: {
     color: Theme.colors.primary,
     fontWeight: '700',
   },
