@@ -5,6 +5,7 @@ const {
   joinGroup,
   getGroupDetails,
   getGroupDashboard,
+  deleteGroup,
 } = require('../controllers/groupController');
 const { protect } = require('../middlewares/authMiddleware');
 
@@ -14,7 +15,8 @@ router.route('/')
 router.post('/join', protect, joinGroup);
 
 router.route('/:id')
-  .get(protect, getGroupDetails);
+  .get(protect, getGroupDetails)
+  .delete(protect, deleteGroup);
 
 router.route('/:id/dashboard')
   .get(protect, getGroupDashboard);

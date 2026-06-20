@@ -298,9 +298,34 @@ const getGroupExpenses = async (req, res) => {
   }
 };
 
+// @desc    Get expense by ID
+// @route   GET /api/expenses/:id
+// @access  Private
+const getExpenseById = async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id)
+      .populate('paidBy', 'name email profileImage')
+      .populate('splitBetween.user', 'name email profileImage');
+    
+    if (!expense) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+
+    const groupObj = await Group.findById(expense.group);
+    if (!groupObj.members.includes(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    res.json(expense);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   addExpense,
   updateExpense,
   deleteExpense,
   getGroupExpenses,
+  getExpenseById,
 };

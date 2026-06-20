@@ -6,6 +6,7 @@ import { useGroup } from '../context/GroupContext';
 import { Theme } from '../constants/theme';
 import { Logo } from '../components/Logo';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function GroupsScreen() {
   const router = useRouter();
@@ -52,7 +53,7 @@ export default function GroupsScreen() {
                       <Text style={styles.badgeText}>{group.type}</Text>
                     </View>
                   </View>
-                  <Text style={styles.groupArrow}>→</Text>
+                  <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
                 </TouchableOpacity>
               ))}
             </View>

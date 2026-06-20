@@ -376,9 +376,47 @@ const getGroupDashboard = async (req, res) => {
   }
 };
 
+// @desc    Delete a group
+// @route   DELETE /api/groups/:id
+// @access  Private
+const deleteGroup = async (req, res) => {
+  try {
+    const groupId = req.params.id;
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // Verify user is the admin
+    if (group.admin.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only the group admin can delete the group' });
+    }
+
+    // Delete associated expenses, settlements, and notifications
+    await Expense.deleteMany({ group: groupId });
+    await Settlement.deleteMany({ group: groupId });
+    await Notification.deleteMany({ group: groupId });
+
+    // Remove group from all members' groups array
+    await User.updateMany(
+      { groups: groupId },
+      { $pull: { groups: groupId } }
+    );
+
+    // Delete the group
+    await group.deleteOne();
+
+    res.json({ message: 'Group removed' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createGroup,
   joinGroup,
   getGroupDetails,
   getGroupDashboard,
+  deleteGroup,
 };

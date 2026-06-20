@@ -64,6 +64,7 @@ export interface GroupContextType {
 
   createGroup: (name: string, type: string) => Promise<void>;
   joinGroup: (code: string) => Promise<void>;
+  deleteGroup: (groupId: string) => Promise<void>;
   setActiveGroup: (id: string | null) => Promise<void>;
 }
 
@@ -154,6 +155,24 @@ export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  const deleteGroup = async (groupId: string) => {
+    try {
+      setLoading(true);
+      await api.delete(`/groups/${groupId}`);
+      await refreshUser(); // refresh user groups list
+      
+      // If the deleted group was active, clear active group
+      if (activeGroupId === groupId) {
+        await setActiveGroup(null);
+      }
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Delete group failed';
+      throw new Error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <GroupContext.Provider
       value={{
@@ -161,6 +180,7 @@ export const GroupProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         loading,
         createGroup,
         joinGroup,
+        deleteGroup,
         setActiveGroup,
       }}
     >

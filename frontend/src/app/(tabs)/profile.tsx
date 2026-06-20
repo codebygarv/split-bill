@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
+import { useGroup } from '../../context/GroupContext';
 import api from '../../services/api';
 import { Theme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,13 +23,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, updateProfile, logout } = useAuth();
+  const { setActiveGroup, deleteGroup } = useGroup();
 
-  const [activeView, setActiveView] = useState<'menu' | 'personal' | 'security'>('menu');
+  const groups = user?.groups || [];
+
+  const [activeView, setActiveView] = useState<'menu' | 'personal' | 'security' | 'groups'>('menu');
 
   // Profile Edit fields
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  
+
   // Password Change fields
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -94,30 +99,51 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDeleteGroup = (groupId: string, groupName: string) => {
+    Alert.alert(
+      'Delete Group',
+      `Are you sure you want to delete "${groupName}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGroup(groupId);
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete group');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderMenu = () => (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       {/* Avatar Panel */}
       <View style={styles.avatarContainer}>
-         <LinearGradient
-            colors={[Theme.colors.primary, Theme.colors.primaryDark]}
-            style={styles.bigAvatar}
-         >
-            <Text style={styles.bigAvatarText}>
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </Text>
-         </LinearGradient>
-         <Text style={styles.profileName}>{user?.name}</Text>
-         <Text style={styles.profileEmail}>{user?.email}</Text>
-         <View style={styles.badge}>
-            <Ionicons name="shield-checkmark" size={12} color={Theme.colors.primaryDark} />
-            <Text style={styles.badgeText}>{user?.useCase || 'User'}</Text>
-         </View>
+        <LinearGradient
+          colors={[Theme.colors.primary, Theme.colors.primaryDark]}
+          style={styles.bigAvatar}
+        >
+          <Text style={styles.bigAvatarText}>
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </Text>
+        </LinearGradient>
+        <Text style={styles.profileName}>{user?.name}</Text>
+        <Text style={styles.profileEmail}>{user?.email}</Text>
+        <View style={styles.badge}>
+          <Ionicons name="shield-checkmark" size={12} color={Theme.colors.primaryDark} />
+          <Text style={styles.badgeText}>{user?.useCase || 'User'}</Text>
+        </View>
       </View>
 
       <View style={styles.menuContainer}>
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveView('personal')}>
           <View style={[styles.menuIconBox, { backgroundColor: '#E3F2FD' }]}>
-             <Ionicons name="person-outline" size={20} color="#1976D2" />
+            <Ionicons name="person-outline" size={20} color="#1976D2" />
           </View>
           <Text style={styles.menuItemText}>Personal Information</Text>
           <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
@@ -127,20 +153,72 @@ export default function ProfileScreen() {
 
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveView('security')}>
           <View style={[styles.menuIconBox, { backgroundColor: '#F3E5F5' }]}>
-             <Ionicons name="lock-closed-outline" size={20} color="#7B1FA2" />
+            <Ionicons name="lock-closed-outline" size={20} color="#7B1FA2" />
           </View>
           <Text style={styles.menuItemText}>Security & Password</Text>
           <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
         </TouchableOpacity>
-        
+
         <View style={styles.menuDivider} />
 
+
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveView('groups')}>
+          <View style={[styles.menuIconBox, { backgroundColor: '#F3E5F5' }]}>
+            <Ionicons name="people-outline" size={20} color="#7B1FA2" />
+          </View>
+          <Text style={styles.menuItemText}>Your Groups</Text>
+          <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
+        </TouchableOpacity>
+
+
+        <View style={styles.menuDivider} />
         <TouchableOpacity style={styles.menuItem} onPress={logout}>
           <View style={[styles.menuIconBox, { backgroundColor: Theme.colors.errorBg }]}>
-             <Ionicons name="log-out-outline" size={20} color={Theme.colors.error} />
+            <Ionicons name="log-out-outline" size={20} color={Theme.colors.error} />
           </View>
           <Text style={[styles.menuItemText, { color: Theme.colors.error }]}>Sign Out</Text>
         </TouchableOpacity>
+
+      </View>
+    </ScrollView>
+  );
+
+  const renderGroups = () => (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Your Groups</Text>
+        {groups.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>You aren't in any groups yet.</Text>
+          </View>
+        ) : (
+          <View style={styles.listContainer}>
+            {groups.map((group) => (
+              <TouchableOpacity
+                key={group._id}
+                style={styles.groupCard}
+                onPress={() => setActiveGroup(group._id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.groupInfo}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  <View style={styles.groupBadge}>
+                    <Text style={styles.groupBadgeText}>{group.type}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteGroup(group._id, group.name)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={Theme.colors.error} />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -149,7 +227,7 @@ export default function ProfileScreen() {
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Personal Information</Text>
-        
+
         {profileError && (
           <View style={[styles.banner, styles.errBanner]}>
             <Ionicons name="alert-circle" size={16} color={Theme.colors.error} />
@@ -191,14 +269,14 @@ export default function ProfileScreen() {
           onPress={handleUpdateProfile}
           disabled={updatingProfile}
         >
-           <LinearGradient
-              colors={[Theme.colors.primary, Theme.colors.primaryDark]}
-              style={[styles.saveBtnGradient, updatingProfile && styles.btnDisabled]}
-           >
-             <Text style={styles.btnText}>
-               {updatingProfile ? 'Saving...' : 'Save Changes'}
-             </Text>
-           </LinearGradient>
+          <LinearGradient
+            colors={[Theme.colors.primary, Theme.colors.primaryDark]}
+            style={[styles.saveBtnGradient, updatingProfile && styles.btnDisabled]}
+          >
+            <Text style={styles.btnText}>
+              {updatingProfile ? 'Saving...' : 'Save Changes'}
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -208,7 +286,7 @@ export default function ProfileScreen() {
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Security</Text>
-        
+
         {pwdError && (
           <View style={[styles.banner, styles.errBanner]}>
             <Ionicons name="alert-circle" size={16} color={Theme.colors.error} />
@@ -263,14 +341,14 @@ export default function ProfileScreen() {
           onPress={handleUpdatePassword}
           disabled={updatingPwd}
         >
-           <LinearGradient
-              colors={[Theme.colors.primary, Theme.colors.primaryDark]}
-              style={[styles.saveBtnGradient, updatingPwd && styles.btnDisabled]}
-           >
-             <Text style={styles.btnText}>
-               {updatingPwd ? 'Updating...' : 'Update Password'}
-             </Text>
-           </LinearGradient>
+          <LinearGradient
+            colors={[Theme.colors.primary, Theme.colors.primaryDark]}
+            style={[styles.saveBtnGradient, updatingPwd && styles.btnDisabled]}
+          >
+            <Text style={styles.btnText}>
+              {updatingPwd ? 'Updating...' : 'Update Password'}
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -281,15 +359,17 @@ export default function ProfileScreen() {
       <StatusBar barStyle="dark-content" />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => activeView === 'menu' ? router.back() : setActiveView('menu')} 
+        <TouchableOpacity
+          onPress={() => activeView === 'menu' ? router.back() : setActiveView('menu')}
           style={styles.iconBtn}
         >
           <Ionicons name="arrow-back" size={24} color={Theme.colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>
-          {activeView === 'menu' ? 'Your Profile' : 
-           activeView === 'personal' ? 'Personal Info' : 'Security'}
+          {activeView === 'menu' ? 'Your Profile' :
+            activeView === 'personal' ? 'Personal Info' :
+              activeView === 'groups' ? 'Groups' :
+                'Security'}
         </Text>
         <View style={styles.iconBtn} />
       </View>
@@ -303,6 +383,7 @@ export default function ProfileScreen() {
         {activeView === 'menu' && renderMenu()}
         {activeView === 'personal' && renderPersonal()}
         {activeView === 'security' && renderSecurity()}
+        {activeView === 'groups' && renderGroups()}
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );
@@ -495,6 +576,59 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#FFFFFF',
     ...Theme.typography.labelMd,
+    fontWeight: '700',
+  },
+  emptyCard: {
+    padding: Theme.spacing.xl,
+    borderRadius: Theme.rounded.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Theme.spacing.md,
+  },
+  emptyText: {
+    ...Theme.typography.bodyMd,
+    color: Theme.colors.textSecondary,
+  },
+  listContainer: {
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.sm,
+  },
+  groupCard: {
+    backgroundColor: Theme.colors.surface,
+    padding: Theme.spacing.md,
+    borderRadius: Theme.rounded.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  groupInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.md,
+  },
+  groupName: {
+    ...Theme.typography.headlineMd,
+    fontSize: 16,
+    color: Theme.colors.text,
+  },
+  groupBadge: {
+    backgroundColor: 'rgba(43, 168, 162, 0.1)',
+    paddingHorizontal: Theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Theme.rounded.full,
+  },
+  groupBadgeText: {
+    color: Theme.colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  groupArrow: {
+    fontSize: 18,
+    color: Theme.colors.primary,
     fontWeight: '700',
   },
 });

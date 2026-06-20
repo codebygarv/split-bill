@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const dns = require('dns');
+const monitor = require('@codebygarv/express-lens');
+
 
 // Force IPv4 for network requests (fixes ENETUNREACH for SMTP on Render)
 dns.setDefaultResultOrder('ipv4first');
@@ -18,6 +20,9 @@ const app = express();
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Support larger payloads for receipt image mockups
+
+
+app.use(monitor()); // Monitor the api request 
 
 // Log incoming requests for debugging
 app.use((req, res, next) => {

@@ -36,6 +36,8 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { activeGroupId, setActiveGroup } = useGroup();
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
 
   const { data: activeGroupData, isLoading, refetch } = useQuery({
     queryKey: ['dashboard', activeGroupId],
@@ -45,6 +47,16 @@ export default function DashboardScreen() {
       return res.data;
     },
     enabled: !!activeGroupId,
+  });
+
+  const { data: expenseDetails, isLoading: isLoadingExpense } = useQuery({
+    queryKey: ['expense', selectedExpenseId],
+    queryFn: async () => {
+      if (!selectedExpenseId) return null;
+      const res = await api.get(`/expenses/${selectedExpenseId}`);
+      return res.data;
+    },
+    enabled: !!selectedExpenseId,
   });
 
   const group = activeGroupData?.group;
@@ -229,7 +241,15 @@ export default function DashboardScreen() {
                 const iconDef = CATEGORY_ICONS[item.category] || CATEGORY_ICONS.Other;
                 const isLast = index === recentExpenses.length - 1;
                 return (
-                  <View key={item._id} style={[styles.expenseItem, !isLast && styles.expenseItemBorder]}>
+                  <TouchableOpacity 
+                    key={item._id} 
+                    style={[styles.expenseItem, !isLast && styles.expenseItemBorder]}
+                    onPress={() => {
+                      setSelectedExpenseId(item._id);
+                      setShowExpenseModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.expenseLeft}>
                       <View style={[styles.categoryIconBg, { backgroundColor: iconDef.bg }]}>
                         <Ionicons name={iconDef.name} size={20} color={iconDef.color} />
@@ -248,7 +268,7 @@ export default function DashboardScreen() {
                         {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -314,6 +334,75 @@ export default function DashboardScreen() {
           </View>
         </View>
       </Modal>
+      {/* Expense Detail Modal */}
+      <Modal
+        visible={showExpenseModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowExpenseModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Expense Details</Text>
+              <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalScroll}>
+              {isLoadingExpense || !expenseDetails ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={styles.emptyText}>Loading details...</Text>
+                </View>
+              ) : (
+                <View>
+                  <View style={{ alignItems: 'center', marginBottom: 24, marginTop: 12 }}>
+                    <View style={[styles.categoryIconBg, { backgroundColor: CATEGORY_ICONS[expenseDetails.category]?.bg || CATEGORY_ICONS.Other.bg, width: 64, height: 64, borderRadius: 32, marginBottom: 12 }]}>
+                      <Ionicons name={CATEGORY_ICONS[expenseDetails.category]?.name || CATEGORY_ICONS.Other.name} size={32} color={CATEGORY_ICONS[expenseDetails.category]?.color || CATEGORY_ICONS.Other.color} />
+                    </View>
+                    <Text style={[styles.overviewAmount, { color: Theme.colors.text, fontSize: 32 }]}>{formatCurrency(expenseDetails.amount)}</Text>
+                    <Text style={[styles.expenseCategory, { fontSize: 18, marginTop: 4 }]}>{expenseDetails.category}</Text>
+                    <Text style={[styles.expenseDate, { fontSize: 14, marginTop: 4 }]}>{new Date(expenseDetails.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                  </View>
+
+                  <View style={{ backgroundColor: Theme.colors.surfaceContainerLow, padding: 16, borderRadius: Theme.rounded.xl, marginBottom: 16 }}>
+                    <Text style={[styles.overviewSubTitle, { color: Theme.colors.textSecondary, marginBottom: 12, fontWeight: '700' }]}>Paid By</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={[styles.avatarContainer, { width: 36, height: 36, borderRadius: 18, marginRight: 12 }]}>
+                        <Text style={[styles.avatarText, { fontSize: 16 }]}>{expenseDetails.paidBy?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+                      </View>
+                      <Text style={[styles.breakdownMessage, { fontWeight: '600' }]}>{expenseDetails.paidBy?.name}</Text>
+                      <Text style={{ marginLeft: 'auto', fontWeight: '700', fontSize: 16 }}>{formatCurrency(expenseDetails.amount)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ backgroundColor: Theme.colors.surfaceContainerLow, padding: 16, borderRadius: Theme.rounded.xl, marginBottom: 16 }}>
+                    <Text style={[styles.overviewSubTitle, { color: Theme.colors.textSecondary, marginBottom: 12, fontWeight: '700' }]}>Split Between</Text>
+                    {expenseDetails.splitBetween.map((split: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: idx === expenseDetails.splitBetween.length - 1 ? 0 : 12 }}>
+                        <View style={[styles.avatarContainer, { width: 32, height: 32, borderRadius: 16, marginRight: 12 }]}>
+                          <Text style={[styles.avatarText, { fontSize: 14 }]}>{split.user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+                        </View>
+                        <Text style={styles.breakdownMessage}>{split.user?.name}</Text>
+                        <Text style={{ marginLeft: 'auto', fontWeight: '600' }}>{formatCurrency(split.amount)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  
+                  {expenseDetails.notes ? (
+                    <View style={{ backgroundColor: Theme.colors.surfaceContainerLow, padding: 16, borderRadius: Theme.rounded.xl }}>
+                      <Text style={[styles.overviewSubTitle, { color: Theme.colors.textSecondary, marginBottom: 8, fontWeight: '700' }]}>Notes</Text>
+                      <Text style={styles.breakdownMessage}>{expenseDetails.notes}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }

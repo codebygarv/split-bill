@@ -470,6 +470,7 @@ export default function AddExpenseScreen() {
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -779,11 +780,6 @@ const styles = StyleSheet.create({
   customInputContainerActive: {
     borderColor: '#2BA8A2',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#2BA8A2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   customCurrency: {
     fontSize: 15,
@@ -792,7 +788,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   customInput: {
-    flex: 1,
+    // flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: '#111827',
