@@ -105,20 +105,24 @@ export default function DashboardScreen() {
         if (item.type === 'you_are_owed') {
           const match = msg.match(/(.+) owes you ₹([\d,]+) for ([^(]+)/);
           if (match) {
-            return `${match[1].trim()} added ${match[3].trim()}`;
+            return `${match[1].trim()} added ${match[3].trim()} (you are owed ₹${match[2].trim()})`;
           }
         } else if (item.type === 'you_owe') {
           const match = msg.match(/You owe (.+) ₹([\d,]+) for ([^(]+)/);
           if (match) {
-            return `${match[1].trim()} added ${match[3].trim()}`;
+            return `${match[1].trim()} added ${match[3].trim()} (you owe ₹${match[2].trim()})`;
           }
         }
         return '';
       }).filter(Boolean);
 
-      const uniqueDescriptions = Array.from(new Set(descriptions));
-      if (uniqueDescriptions.length > 0) {
-        narrative = `Because ${uniqueDescriptions.slice(0, 2).join(' and ')}, `;
+      if (descriptions.length > 0) {
+        if (descriptions.length === 1) {
+          narrative = `Because ${descriptions[0]}, `;
+        } else {
+          const last = descriptions.pop();
+          narrative = `Because ${descriptions.join(', ')} and ${last}, `;
+        }
       }
     }
 
