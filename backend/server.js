@@ -12,6 +12,12 @@ dns.setDefaultResultOrder('ipv4first');
 // Load environment variables
 dotenv.config();
 
+// Ensure critical environment variables exist
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
+  process.exit(1);
+}
+
 // Connect to Database
 connectDB();
 

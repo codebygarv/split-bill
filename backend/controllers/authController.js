@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const cloudinary = require('../config/cloudinary');
+const crypto = require('crypto');
 
 let transporter;
 const setupTransporter = async () => {
@@ -36,12 +37,12 @@ const setupTransporter = async () => {
 setupTransporter();
 
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'super_secret_jwt_key_split_bill_app_2026', {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
 
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateOTP = () => crypto.randomInt(100000, 999999).toString();
 
 const sendOTPEmail = async (email, otp) => {
   if (!transporter) await setupTransporter();

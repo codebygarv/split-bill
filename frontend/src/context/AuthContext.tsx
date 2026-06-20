@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
 import { registerForPushNotificationsAsync } from '../services/pushNotifications';
 
@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const restoreSession = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem('token');
+      const storedToken = await SecureStore.getItemAsync('token');
       if (storedToken) {
         setToken(storedToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
@@ -85,7 +85,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       const { token: userToken, ...userData } = res.data;
-      await AsyncStorage.setItem('token', userToken);
+      await SecureStore.setItemAsync('token', userToken);
       setToken(userToken);
       setUser(userData);
       return { requiresOtp: false };
@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       const { token: userToken, ...userData } = res.data;
-      await AsyncStorage.setItem('token', userToken);
+      await SecureStore.setItemAsync('token', userToken);
       setToken(userToken);
       setUser(userData);
       return { requiresOtp: false };
@@ -117,7 +117,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const res = await api.post('/auth/verify-otp', { email, otp });
       const { token: userToken, ...userData } = res.data;
-      await AsyncStorage.setItem('token', userToken);
+      await SecureStore.setItemAsync('token', userToken);
       setToken(userToken);
       setUser(userData);
     } catch (error: any) {
@@ -144,7 +144,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('Failed to clear push token on logout:', err);
         }
       }
-      await AsyncStorage.removeItem('token');
+      await SecureStore.deleteItemAsync('token');
       setToken(null);
       setUser(null);
       setPushToken(null);
