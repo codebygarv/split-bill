@@ -355,7 +355,7 @@ export default function DashboardScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                 {!isLoadingExpense && expenseDetails && (
                   <TouchableOpacity onPress={handleEditExpense}>
-                    <Ionicons name="pencil" size={22} color={Theme.colors.primary} />
+                    <Ionicons name="create-outline" size={22} color={Theme.colors.text} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
