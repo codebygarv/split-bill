@@ -2,12 +2,13 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { GroupProvider, useGroup } from '../context/GroupContext';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, Animated } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Logo } from '../components/Logo';
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,26 @@ try {
   console.log('Failed to setup notifications handler:', e);
 }
 
+
+function SplashScreen() {
+  return (
+    <View style={styles.splashContainer}>
+      <View style={styles.splashContent}>
+        {/* Simple Brand Container */}
+        <View style={styles.brandContainer}>
+          <Logo size={70} />
+          <Text style={styles.splashTitle}>SplitBill</Text>
+          <Text style={styles.splashTagline}>Simplify your shared expenses</Text>
+        </View>
+
+        {/* Loading indicator */}
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="small" color={Theme.colors.primary} />
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function NavigationGuard() {
   const { user, loading: authLoading } = useAuth();
@@ -68,11 +89,7 @@ function NavigationGuard() {
   }, [user, activeGroupId, authLoading, segments]);
 
   if (authLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Theme.colors.primary} />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   return (
@@ -111,6 +128,41 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: '#F2F6F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: Theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splashContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  brandContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  splashTitle: {
+    color: '#0D2C2A',
+    marginTop: 12,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  splashTagline: {
+    color: Theme.colors.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  loaderContainer: {
+    marginTop: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },

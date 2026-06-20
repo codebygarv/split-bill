@@ -15,6 +15,7 @@ import api from '../services/api';
 import { Theme } from '../constants/theme';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '../components/Skeleton';
+import { Ionicons } from '@expo/vector-icons';
 
 interface SettlementRecord {
   _id: string;
@@ -108,7 +109,7 @@ export default function SettleUpScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color={Theme.colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Settle Up</Text>
         <View style={{ width: 40 }} />
@@ -126,7 +127,7 @@ export default function SettleUpScreen() {
           <View style={[styles.card, styles.alertBorder]}>
             <Text style={[styles.cardTitle, styles.alertText]}>Pending Confirmations</Text>
             <Text style={styles.cardSubtitle}>Confirm if you have received these payments:</Text>
-            
+
             <View style={styles.listContainer}>
               {pendingIncomingSettlements.map((item) => (
                 <View key={item._id} style={styles.settlementActionRow}>
@@ -155,17 +156,17 @@ export default function SettleUpScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>To Pay</Text>
           {loadingDashboard ? (
-             <View style={styles.listContainer}>
-                {[1, 2].map((key) => (
-                  <View key={key} style={styles.settlementActionRow}>
-                    <View style={styles.rowInfo}>
-                      <Skeleton width={120} height={16} style={{ marginBottom: 4 }} />
-                      <Skeleton width={80} height={16} />
-                    </View>
-                    <Skeleton width={80} height={32} borderRadius={6} />
+            <View style={styles.listContainer}>
+              {[1, 2].map((key) => (
+                <View key={key} style={styles.settlementActionRow}>
+                  <View style={styles.rowInfo}>
+                    <Skeleton width={120} height={16} style={{ marginBottom: 4 }} />
+                    <Skeleton width={80} height={16} />
                   </View>
-                ))}
-             </View>
+                  <Skeleton width={80} height={32} borderRadius={6} />
+                </View>
+              ))}
+            </View>
           ) : owesList.length === 0 ? (
             <Text style={styles.emptyText}>🎉 You do not owe anyone in this group.</Text>
           ) : (
@@ -205,14 +206,14 @@ export default function SettleUpScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>To Receive</Text>
           {loadingDashboard ? (
-             <View style={styles.listContainer}>
-                {[1, 2].map((key) => (
-                  <View key={key} style={styles.debtOwedRow}>
-                     <Skeleton width={150} height={16} />
-                     <Skeleton width={60} height={16} />
-                  </View>
-                ))}
-             </View>
+            <View style={styles.listContainer}>
+              {[1, 2].map((key) => (
+                <View key={key} style={styles.debtOwedRow}>
+                  <Skeleton width={150} height={16} />
+                  <Skeleton width={60} height={16} />
+                </View>
+              ))}
+            </View>
           ) : owedList.length === 0 ? (
             <Text style={styles.emptyText}>Nobody owes you anything currently.</Text>
           ) : (
@@ -233,20 +234,20 @@ export default function SettleUpScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Settlement History</Text>
           {loadingHistory ? (
-             <View style={styles.historyList}>
-               {[1, 2, 3].map((key) => (
-                  <View key={key} style={styles.historyRow}>
-                    <View>
-                      <Skeleton width={140} height={14} style={{ marginBottom: 4 }} />
-                      <Skeleton width={80} height={10} />
-                    </View>
-                    <View style={styles.historyRight}>
-                      <Skeleton width={60} height={14} style={{ marginBottom: 4 }} />
-                      <Skeleton width={40} height={14} borderRadius={10} />
-                    </View>
+            <View style={styles.historyList}>
+              {[1, 2, 3].map((key) => (
+                <View key={key} style={styles.historyRow}>
+                  <View>
+                    <Skeleton width={140} height={14} style={{ marginBottom: 4 }} />
+                    <Skeleton width={80} height={10} />
                   </View>
-               ))}
-             </View>
+                  <View style={styles.historyRight}>
+                    <Skeleton width={60} height={14} style={{ marginBottom: 4 }} />
+                    <Skeleton width={40} height={14} borderRadius={10} />
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : settlementHistory.length === 0 ? (
             <Text style={styles.emptyText}>No settlement payments logged yet.</Text>
           ) : (
@@ -254,7 +255,7 @@ export default function SettleUpScreen() {
               {settlementHistory.map((item) => {
                 const isFromMe = item.fromUser?._id === user?._id;
                 const isToMe = item.toUser?._id === user?._id;
-                
+
                 let logText = '';
                 if (isFromMe) {
                   logText = `You paid ${item.toUser?.name}`;
@@ -314,12 +315,10 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.border,
   },
   backButton: {
-    padding: Theme.spacing.xs,
-  },
-  backText: {
-    color: Theme.colors.primaryDark,
-    ...Theme.typography.labelMd,
-    fontWeight: '700',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     ...Theme.typography.headlineMd,
