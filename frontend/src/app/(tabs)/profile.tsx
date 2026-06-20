@@ -19,6 +19,8 @@ import api from '../../services/api';
 import { Theme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -28,6 +30,35 @@ export default function ProfileScreen() {
   const groups = user?.groups || [];
 
   const [activeView, setActiveView] = useState<'menu' | 'personal' | 'security' | 'groups'>('menu');
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need storage permissions to change the profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0].base64) {
+      const base64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setUpdatingProfile(true);
+      try {
+        await updateProfile(user?.name || '', user?.phone || '', base64Uri);
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to update profile picture.');
+      } finally {
+        setUpdatingProfile(false);
+      }
+    }
+  };
 
   // Profile Edit fields
   const [name, setName] = useState(user?.name || '');
@@ -124,14 +155,26 @@ export default function ProfileScreen() {
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       {/* Avatar Panel */}
       <View style={styles.avatarContainer}>
-        <LinearGradient
-          colors={[Theme.colors.primary, Theme.colors.primaryDark]}
-          style={styles.bigAvatar}
-        >
-          <Text style={styles.bigAvatarText}>
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </Text>
-        </LinearGradient>
+        <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.avatarWrapper}>
+          {user?.profileImage ? (
+            <Image
+              source={{ uri: user.profileImage }}
+              style={styles.bigAvatarImage}
+            />
+          ) : (
+            <LinearGradient
+              colors={[Theme.colors.primary, Theme.colors.primaryDark]}
+              style={styles.bigAvatar}
+            >
+              <Text style={styles.bigAvatarText}>
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
+            </LinearGradient>
+          )}
+          <View style={styles.editBadge}>
+            <Ionicons name="camera" size={14} color="#FFF" />
+          </View>
+        </TouchableOpacity>
         <Text style={styles.profileName}>{user?.name}</Text>
         <Text style={styles.profileEmail}>{user?.email}</Text>
         <View style={styles.badge}>
@@ -425,13 +468,41 @@ const styles = StyleSheet.create({
     marginVertical: Theme.spacing.md,
     marginBottom: Theme.spacing.xl,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: Theme.spacing.sm,
+  },
+  bigAvatarImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Theme.colors.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   bigAvatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
     shadowColor: Theme.colors.primaryDark,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

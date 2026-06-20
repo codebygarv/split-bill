@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { Skeleton } from '../../components/Skeleton';
+import { Image } from 'expo-image';
 
 const CATEGORY_ICONS: Record<string, { name: any; color: string; bg: string }> = {
   Vegetables: { name: 'leaf', color: '#4CAF50', bg: '#E8F5E9' },
@@ -73,6 +74,12 @@ export default function DashboardScreen() {
     } catch (error) {
       console.log('Error sharing code:', error);
     }
+  };
+
+  const handleEditExpense = () => {
+    if (!selectedExpenseId) return;
+    setShowExpenseModal(false);
+    router.push({ pathname: '/add-expense', params: { id: selectedExpenseId } });
   };
 
   const formatCurrency = (val: number) => {
@@ -345,9 +352,16 @@ export default function DashboardScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Expense Details</Text>
-              <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
-                <Ionicons name="close" size={24} color={Theme.colors.text} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                {!isLoadingExpense && expenseDetails && (
+                  <TouchableOpacity onPress={handleEditExpense}>
+                    <Ionicons name="pencil" size={22} color={Theme.colors.primary} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
+                  <Ionicons name="close" size={24} color={Theme.colors.text} />
+                </TouchableOpacity>
+              </View>
             </View>
             
             <ScrollView style={styles.modalScroll}>
@@ -366,12 +380,19 @@ export default function DashboardScreen() {
                     <Text style={[styles.expenseDate, { fontSize: 14, marginTop: 4 }]}>{new Date(expenseDetails.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
                   </View>
 
-                  <View style={{ backgroundColor: Theme.colors.surfaceContainerLow, padding: 16, borderRadius: Theme.rounded.xl, marginBottom: 16 }}>
+                   <View style={{ backgroundColor: Theme.colors.surfaceContainerLow, padding: 16, borderRadius: Theme.rounded.xl, marginBottom: 16 }}>
                     <Text style={[styles.overviewSubTitle, { color: Theme.colors.textSecondary, marginBottom: 12, fontWeight: '700' }]}>Paid By</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={[styles.avatarContainer, { width: 36, height: 36, borderRadius: 18, marginRight: 12 }]}>
-                        <Text style={[styles.avatarText, { fontSize: 16 }]}>{expenseDetails.paidBy?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-                      </View>
+                      {expenseDetails.paidBy?.profileImage ? (
+                        <Image
+                          source={{ uri: expenseDetails.paidBy.profileImage }}
+                          style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
+                        />
+                      ) : (
+                        <View style={[styles.avatarContainer, { width: 36, height: 36, borderRadius: 18, marginRight: 12 }]}>
+                          <Text style={[styles.avatarText, { fontSize: 16 }]}>{expenseDetails.paidBy?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+                        </View>
+                      )}
                       <Text style={[styles.breakdownMessage, { fontWeight: '600' }]}>{expenseDetails.paidBy?.name}</Text>
                       <Text style={{ marginLeft: 'auto', fontWeight: '700', fontSize: 16 }}>{formatCurrency(expenseDetails.amount)}</Text>
                     </View>
@@ -381,9 +402,16 @@ export default function DashboardScreen() {
                     <Text style={[styles.overviewSubTitle, { color: Theme.colors.textSecondary, marginBottom: 12, fontWeight: '700' }]}>Split Between</Text>
                     {expenseDetails.splitBetween.map((split: any, idx: number) => (
                       <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: idx === expenseDetails.splitBetween.length - 1 ? 0 : 12 }}>
-                        <View style={[styles.avatarContainer, { width: 32, height: 32, borderRadius: 16, marginRight: 12 }]}>
-                          <Text style={[styles.avatarText, { fontSize: 14 }]}>{split.user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-                        </View>
+                        {split.user?.profileImage ? (
+                          <Image
+                            source={{ uri: split.user.profileImage }}
+                            style={{ width: 32, height: 32, borderRadius: 16, marginRight: 12 }}
+                          />
+                        ) : (
+                          <View style={[styles.avatarContainer, { width: 32, height: 32, borderRadius: 16, marginRight: 12 }]}>
+                            <Text style={[styles.avatarText, { fontSize: 14 }]}>{split.user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+                          </View>
+                        )}
                         <Text style={styles.breakdownMessage}>{split.user?.name}</Text>
                         <Text style={{ marginLeft: 'auto', fontWeight: '600' }}>{formatCurrency(split.amount)}</Text>
                       </View>

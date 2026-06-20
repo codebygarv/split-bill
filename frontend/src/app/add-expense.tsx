@@ -14,14 +14,14 @@ import {
   Dimensions,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGroup } from '../context/GroupContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Theme } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -49,6 +49,8 @@ interface Member {
 
 export default function AddExpenseScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!id;
   const { user } = useAuth();
   const { activeGroupId } = useGroup();
   const queryClient = useQueryClient();
@@ -77,9 +79,44 @@ export default function AddExpenseScreen() {
   const [notesFocused, setNotesFocused] = useState(false);
   const [focusedCustomInput, setFocusedCustomInput] = useState<string | null>(null);
 
+  const { data: expense, isLoading: isLoadingExpense } = useQuery({
+    queryKey: ['expense', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const res = await api.get(`/expenses/${id}`);
+      return res.data;
+    },
+    enabled: isEditing,
+  });
+
   useEffect(() => {
     fetchGroupMembers();
   }, [activeGroupId]);
+
+  useEffect(() => {
+    if (isEditing && expense && members.length > 0) {
+      setAmount(expense.amount.toString());
+      setCategory(expense.category);
+      setNotes(expense.notes || '');
+      setPaidBy(expense.paidBy?._id || expense.paidBy || '');
+      setSplitType(expense.splitType || 'equal');
+
+      if (expense.splitType === 'equal') {
+        const splitIds = expense.splitBetween.map((s: any) => s.user?._id || s.user || s);
+        setSplitMembers(splitIds);
+      } else {
+        const customObj: Record<string, string> = {};
+        members.forEach(m => {
+          customObj[m._id] = '';
+        });
+        expense.splitBetween.forEach((s: any) => {
+          const userId = s.user?._id || s.user || s;
+          customObj[userId] = s.amount.toString();
+        });
+        setCustomSplits(customObj);
+      }
+    }
+  }, [isEditing, expense, members]);
 
   const fetchGroupMembers = async () => {
     if (!activeGroupId) return;
@@ -161,11 +198,17 @@ export default function AddExpenseScreen() {
           payload.customSplits = activeSplits;
         }
 
-        await api.post('/expenses', payload);
+        if (isEditing) {
+          await api.put(`/expenses/${id}`, payload);
+          queryClient.invalidateQueries({ queryKey: ['expense', id] });
+        } else {
+          await api.post('/expenses', payload);
+        }
         queryClient.invalidateQueries({ queryKey: ['dashboard', activeGroupId] });
+        queryClient.invalidateQueries({ queryKey: ['notifications', activeGroupId] });
         router.back();
       } catch (err: any) {
-        setErrorMsg(err.message || err.response?.data?.message || 'Failed to add expense');
+        setErrorMsg(err.message || err.response?.data?.message || 'Failed to save expense');
       }
     });
   };
@@ -176,6 +219,14 @@ export default function AddExpenseScreen() {
     0
   );
   const remainingAmount = numericAmount - customSplitsSum;
+
+  if (isEditing && isLoadingExpense) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
 
   return (
     <LinearGradient
@@ -189,7 +240,7 @@ export default function AddExpenseScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Expense</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Expense' : 'Add Expense'}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -215,7 +266,7 @@ export default function AddExpenseScreen() {
                 onFocus={() => setAmountFocused(true)}
                 onBlur={() => setAmountFocused(false)}
                 selectionColor="#FFFFFF"
-                autoFocus
+                autoFocus={!isEditing}
               />
             </View>
           </View>
@@ -459,7 +510,7 @@ export default function AddExpenseScreen() {
                 <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
               )}
               <Text style={styles.submitBtnText}>
-                {isPending ? 'Saving Expense...' : 'Save Expense'}
+                {isPending ? (isEditing ? 'Updating...' : 'Saving Expense...') : (isEditing ? 'Update Expense' : 'Save Expense')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>

@@ -16,6 +16,7 @@ import { Theme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { Skeleton } from '../../components/Skeleton';
 
 interface Member {
@@ -23,6 +24,7 @@ interface Member {
   name: string;
   email: string;
   createdAt: string;
+  profileImage?: string;
 }
 
 interface Expense {
@@ -152,11 +154,18 @@ export default function MembersScreen() {
                 return (
                   <View key={member._id} style={[styles.memberRow, !isLast && styles.memberRowBorder]}>
                     <View style={styles.memberLeft}>
+                    {member.profileImage ? (
+                      <Image
+                        source={{ uri: member.profileImage }}
+                        style={styles.avatarImage}
+                      />
+                    ) : (
                       <View style={styles.avatar}>
                         <Text style={styles.avatarText}>
                           {member.name.charAt(0).toUpperCase()}
                         </Text>
                       </View>
+                    )}
                       <View>
                         <Text style={styles.memberName}>{member.name}</Text>
                         <Text style={styles.memberJoined}>Joined {joinedDate}</Text>
@@ -307,6 +316,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Theme.spacing.md,
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatar: {
     width: 44,

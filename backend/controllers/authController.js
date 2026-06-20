@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
+const cloudinary = require('../config/cloudinary');
 
 let transporter;
 const setupTransporter = async () => {
@@ -273,7 +274,20 @@ const updateUserProfile = async (req, res) => {
     if (user) {
       user.name = req.body.name || user.name;
       user.phone = req.body.phone !== undefined ? req.body.phone : user.phone;
-      user.profileImage = req.body.profileImage !== undefined ? req.body.profileImage : user.profileImage;
+
+      if (req.body.profileImage && req.body.profileImage.startsWith('data:image')) {
+        try {
+          const uploadRes = await cloudinary.uploader.upload(req.body.profileImage, {
+            folder: 'splitbill_profiles',
+          });
+          user.profileImage = uploadRes.secure_url;
+        } catch (uploadErr) {
+          console.error('Cloudinary upload error:', uploadErr);
+          return res.status(500).json({ message: 'Failed to upload profile image to Cloudinary' });
+        }
+      } else if (req.body.profileImage !== undefined) {
+        user.profileImage = req.body.profileImage;
+      }
 
       const updatedUser = await user.save();
 
