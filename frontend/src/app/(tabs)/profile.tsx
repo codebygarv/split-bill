@@ -289,6 +289,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color={Theme.colors.textSecondary} />
         </TouchableOpacity>
 
+        <View style={styles.menuDivider} />
 
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveView('feedback')}>
           <View style={[styles.menuIconBox, { backgroundColor: '#E8F5E9' }]}>
@@ -515,7 +516,7 @@ export default function ProfileScreen() {
 
         <View style={styles.inputGroup}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, width: '100%' }}>
-            <Text style={styles.label}>Screenshots / Images (Max 2)</Text>
+            <Text style={styles.label}>Screenshots / Images </Text>
             <Text style={{ fontSize: 12, color: Theme.colors.textSecondary }}>{feedbackImages.length} / 2</Text>
           </View>
 
