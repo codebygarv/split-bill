@@ -168,7 +168,7 @@ export default function SettleUpScreen() {
               ))}
             </View>
           ) : owesList.length === 0 ? (
-            <Text style={styles.emptyText}>🎉 You do not owe anyone in this group.</Text>
+            <Text style={styles.emptyText}>🎉 You have no payments to make in this group.</Text>
           ) : (
             <View style={styles.listContainer}>
               {owesList.map((item: any) => {
@@ -215,7 +215,7 @@ export default function SettleUpScreen() {
               ))}
             </View>
           ) : owedList.length === 0 ? (
-            <Text style={styles.emptyText}>Nobody owes you anything currently.</Text>
+            <Text style={styles.emptyText}>You have no payments to receive currently.</Text>
           ) : (
             <View style={styles.listContainer}>
               {owedList.map((item: any) => (

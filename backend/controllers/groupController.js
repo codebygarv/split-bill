@@ -302,7 +302,7 @@ const getGroupDashboard = async (req, res) => {
                  type: 'you_are_owed',
                  amount: split.amount,
                  date: exp.date,
-                 message: `${debtor?.name} owes you ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
+                 message: `${debtor?.name} needs to pay you ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
               });
            } else if (debtorId === userId) {
               const payer = group.members.find(m => m._id.toString() === payerId);
@@ -310,7 +310,7 @@ const getGroupDashboard = async (req, res) => {
                  type: 'you_owe',
                  amount: split.amount,
                  date: exp.date,
-                 message: `You owe ${payer?.name || exp.paidBy.name} ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
+                 message: `You need to pay ${payer?.name || exp.paidBy.name} ₹${split.amount} for ${exp.category} ${exp.notes ? `(${exp.notes})` : ''}`.trim()
               });
            }
         }

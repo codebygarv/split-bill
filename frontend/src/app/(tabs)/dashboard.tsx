@@ -82,6 +82,15 @@ export default function DashboardScreen() {
     router.push({ pathname: '/add-expense', params: { id: selectedExpenseId } });
   };
 
+  const formatBalanceMessage = (msg: string) => {
+    if (!msg) return '';
+    return msg
+      .replace(/\bowes you\b/gi, 'needs to pay you')
+      .replace(/\bYou owe\b/gi, 'You need to pay')
+      .replace(/\bowes\b/gi, 'needs to pay')
+      .replace(/\bowe\b/gi, 'need to pay');
+  };
+
   const getNaturalSummary = () => {
     if (!balances) return '';
     const { balanceBreakdown = [], owesList = [], owedList = [] } = balances;
@@ -101,16 +110,16 @@ export default function DashboardScreen() {
     let narrative = "";
     if (transactions.length > 0) {
       const descriptions = transactions.map((item: any) => {
-        const msg = item.message;
+        const msg = formatBalanceMessage(item.message);
         if (item.type === 'you_are_owed') {
-          const match = msg.match(/(.+) owes you ₹([\d,]+) for ([^(]+)/);
+          const match = msg.match(/(.+) needs to pay you ₹([\d,]+) for ([^(]+)/i);
           if (match) {
-            return `${match[1].trim()} added ${match[3].trim()} (you are owed ₹${match[2].trim()})`;
+            return `${match[1].trim()} added ${match[3].trim()} (to receive: ₹${match[2].trim()})`;
           }
         } else if (item.type === 'you_owe') {
-          const match = msg.match(/You owe (.+) ₹([\d,]+) for ([^(]+)/);
+          const match = msg.match(/You need to pay (.+) ₹([\d,]+) for ([^(]+)/i);
           if (match) {
-            return `${match[1].trim()} added ${match[3].trim()} (you owe ₹${match[2].trim()})`;
+            return `${match[1].trim()} added ${match[3].trim()} (to pay: ₹${match[2].trim()})`;
           }
         }
         return '';
@@ -386,7 +395,7 @@ export default function DashboardScreen() {
                           />
                         </View>
                         <View style={styles.breakdownInfo}>
-                          <Text style={styles.breakdownMessage}>{item.message}</Text>
+                          <Text style={styles.breakdownMessage}>{formatBalanceMessage(item.message)}</Text>
                           <Text style={styles.breakdownDate}>
                             {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                           </Text>
